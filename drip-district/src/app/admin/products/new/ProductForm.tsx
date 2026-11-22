@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Variant = {
   id: number;
@@ -22,7 +22,7 @@ const categories = [
 
 const fieldStyle = {
   width: "100%",
-  padding: "16px",
+  padding: "15px",
   border: "1px solid #ccc",
   background: "#fff",
   color: "#111",
@@ -36,16 +36,10 @@ const labelStyle = {
   fontWeight: 600,
 };
 
-function makeSlug(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
 export default function ProductForm() {
+  const imageInput = useRef<HTMLInputElement>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [imageCount, setImageCount] = useState(0);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [variants, setVariants] = useState<Variant[]>([
@@ -59,6 +53,16 @@ export default function ProductForm() {
     },
   ]);
 
+  useEffect(() => {
+    const files = Array.from(imageInput.current?.files || []);
+    const urls = files.map((file) => URL.createObjectURL(file));
+
+    setPreviews(urls);
+    setImageCount(files.length);
+
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [imageCount]);
+
   function updateVariant(
     id: number,
     field: keyof Omit<Variant, "id">,
@@ -66,9 +70,7 @@ export default function ProductForm() {
   ) {
     setVariants((current) =>
       current.map((variant) =>
-        variant.id === id
-          ? { ...variant, [field]: value }
-          : variant
+        variant.id === id ? { ...variant, [field]: value } : variant
       )
     );
   }
@@ -93,13 +95,36 @@ export default function ProductForm() {
     );
   }
 
+  function removeImage(index: number) {
+    const input = imageInput.current;
+    if (!input || !input.files) return;
+
+    const transfer = new DataTransfer();
+    Array.from(input.files).forEach((file, i) => {
+      if (i !== index) transfer.items.add(file);
+    });
+
+    input.files = transfer.files;
+    setImageCount(transfer.files.length);
+  }
+
+  function updateSlug(value: string) {
+    return value
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
+
   return (
     <form
       action="/api/admin/products"
       method="POST"
+      encType="multipart/form-data"
       style={{
         display: "grid",
-        gap: "28px",
+        gap: "26px",
         maxWidth: "750px",
         marginTop: "35px",
       }}
@@ -111,7 +136,7 @@ export default function ProductForm() {
           value={title}
           onChange={(event) => {
             setTitle(event.target.value);
-            setSlug(makeSlug(event.target.value));
+            setSlug(updateSlug(event.target.value));
           }}
           style={fieldStyle}
           placeholder="e.g. District Oversized Hoodie"
@@ -126,14 +151,18 @@ export default function ProductForm() {
           value={slug}
           onChange={(event) => setSlug(event.target.value)}
           style={fieldStyle}
-          placeholder="district-oversized-hoodie"
           required
         />
       </label>
 
       <label style={labelStyle}>
         Category
-        <select name="category" required defaultValue="Mens Clothing" style={fieldStyle}>
+        <select
+          name="category"
+          required
+          defaultValue="Mens Clothing"
+          style={fieldStyle}
+        >
           {categories.map((category) => (
             <option key={category} value={category}>
               {category}
@@ -162,24 +191,68 @@ export default function ProductForm() {
         />
       </label>
 
-      <label style={labelStyle}>
-        Product images — paste image URLs
-        <textarea
+      <div style={{ display: "grid", gap: "14px" }}>
+        <strong>PRODUCT IMAGES</strong>
+        <p className="muted">
+          Choose multiple photos from your phone or device.
+        </p>
+
+        <input
+          ref={imageInput}
+          type="file"
           name="images"
-          rows={4}
+          accept="image/*"
+          multiple
+          onChange={() => setImageCount(imageInput.current?.files?.length || 0)}
           style={fieldStyle}
-          placeholder={"One secure image URL per line"}
         />
-      </label>
+
+        {previews.length > 0 && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "12px",
+            }}
+          >
+            {previews.map((preview, index) => (
+              <div key={preview} style={{ position: "relative" }}>
+                <img
+                  src={preview}
+                  alt={`Product preview ${index + 1}`}
+                  style={{
+                    width: "100%",
+                    height: "150px",
+                    objectFit: "cover",
+                    border: "1px solid #ccc",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeImage(index)}
+                  style={{
+                    width: "100%",
+                    padding: "9px",
+                    background: "#222",
+                    color: "#fff",
+                    border: 0,
+                    marginTop: "5px",
+                  }}
+                >
+                  REMOVE IMAGE
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="muted">{imageCount} images selected</p>
+      </div>
 
       <div style={{ display: "grid", gap: "18px" }}>
-        <h2 style={{ fontSize: "25px", margin: 0 }}>
-          Product variants
-        </h2>
-
+        <h2 style={{ fontSize: "25px", margin: 0 }}>PRODUCT VARIANTS</h2>
         <p className="muted">
-          Add a size, colour, delivery region, price and stock
-          quantity for each variant.
+          Each variant has its own size, colour, delivery, price and stock.
         </p>
 
         {variants.map((variant, index) => (
@@ -189,7 +262,7 @@ export default function ProductForm() {
               border: "1px solid #ccc",
               padding: "18px",
               display: "grid",
-              gap: "16px",
+              gap: "15px",
             }}
           >
             <strong>VARIANT {index + 1}</strong>
@@ -199,11 +272,11 @@ export default function ProductForm() {
               <input
                 name="variantSize"
                 value={variant.size}
-                onChange={(event) =>
-                  updateVariant(variant.id, "size", event.target.value)
+                onChange={(e) =>
+                  updateVariant(variant.id, "size", e.target.value)
                 }
                 style={fieldStyle}
-                placeholder="e.g. Medium or One Size"
+                placeholder="Medium or One Size"
               />
             </label>
 
@@ -212,11 +285,11 @@ export default function ProductForm() {
               <input
                 name="variantColour"
                 value={variant.colour}
-                onChange={(event) =>
-                  updateVariant(variant.id, "colour", event.target.value)
+                onChange={(e) =>
+                  updateVariant(variant.id, "colour", e.target.value)
                 }
                 style={fieldStyle}
-                placeholder="e.g. Black"
+                placeholder="Black"
               />
             </label>
 
@@ -225,8 +298,8 @@ export default function ProductForm() {
               <select
                 name="variantDelivery"
                 value={variant.delivery}
-                onChange={(event) =>
-                  updateVariant(variant.id, "delivery", event.target.value)
+                onChange={(e) =>
+                  updateVariant(variant.id, "delivery", e.target.value)
                 }
                 style={fieldStyle}
               >
@@ -244,8 +317,8 @@ export default function ProductForm() {
                 step="0.01"
                 required
                 value={variant.price}
-                onChange={(event) =>
-                  updateVariant(variant.id, "price", event.target.value)
+                onChange={(e) =>
+                  updateVariant(variant.id, "price", e.target.value)
                 }
                 style={fieldStyle}
                 placeholder="39.99"
@@ -261,8 +334,8 @@ export default function ProductForm() {
                 step="1"
                 required
                 value={variant.stock}
-                onChange={(event) =>
-                  updateVariant(variant.id, "stock", event.target.value)
+                onChange={(e) =>
+                  updateVariant(variant.id, "stock", e.target.value)
                 }
                 style={fieldStyle}
               />
@@ -274,10 +347,9 @@ export default function ProductForm() {
               disabled={variants.length === 1}
               style={{
                 padding: "13px",
-                border: "1px solid #999",
                 background: "#eee",
                 color: "#111",
-                opacity: variants.length === 1 ? 0.4 : 1,
+                border: "1px solid #999",
               }}
             >
               REMOVE VARIANT
@@ -290,9 +362,9 @@ export default function ProductForm() {
           onClick={addVariant}
           style={{
             padding: "18px",
-            border: "0",
             background: "#e8e8e8",
             color: "#111",
+            border: 0,
             fontWeight: "bold",
           }}
         >
@@ -301,12 +373,7 @@ export default function ProductForm() {
       </div>
 
       <label style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-        <input
-          type="checkbox"
-          name="featured"
-          value="true"
-          style={{ width: "22px", height: "22px" }}
-        />
+        <input type="checkbox" name="featured" value="true" />
         Feature on homepage
       </label>
 
@@ -316,7 +383,6 @@ export default function ProductForm() {
           name="active"
           value="true"
           defaultChecked
-          style={{ width: "22px", height: "22px" }}
         />
         Published / visible in shop
       </label>
@@ -324,8 +390,7 @@ export default function ProductForm() {
       <button
         type="submit"
         style={{
-          width: "100%",
-          padding: "22px",
+          padding: "20px",
           background: "#111",
           color: "#fff",
           border: 0,
