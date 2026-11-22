@@ -1,3 +1,41 @@
-"use client";
-import { useState } from "react";
-export default function AdminLogin(){const [email,setEmail]=useState(""),[password,setPassword]=useState(""),[error,setError]=useState("");async function login(e:React.FormEvent){e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});const d=await r.json();if(r.ok)location.href="/admin";else setError(d.error||"Login failed");}return <section className="section"><h1 className="section-heading">ADMIN ACCESS</h1><form className="simple-form" onSubmit={login}><input type="email" placeholder="Admin email" value={email} onChange={e=>setEmail(e.target.value)} required/><input type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} required/><button className="solid-button">SIGN IN</button>{error&&<p role="alert">{error}</p>}</form></section>}
+
+export default function AdminLoginPage() {
+  return (
+    <main className="auth-container">
+      <div className="auth-card">
+        <a href="/" className="auth-logo">
+          DRIP DISTRICT
+        </a>
+
+        <span className="admin-label">ADMIN ACCESS</span>
+
+        <h1>Control centre.</h1>
+        <p>Sign in with your authorised administrator account.</p>
+
+        <form action="/api/admin/auth/login" method="POST">
+          <label>Admin email</label>
+          <input
+            type="email"
+            name="email"
+            placeholder="admin@example.com"
+            required
+          />
+
+          <label>Password</label>
+          <input
+            type="password"
+            name="password"
+            placeholder="Your admin password"
+            required
+          />
+
+          <button type="submit">ADMIN SIGN IN</button>
+        </form>
+
+        <p className="auth-footer">
+          Restricted access. Admin accounts are assigned privately.
+        </p>
+      </div>
+    </main>
+  );
+}
