@@ -270,8 +270,17 @@ export async function POST(request: Request) {
       success: true,
       product,
     });
-  } catch (error) {
+   } catch (error) {
     console.error("PRODUCT SAVE ERROR:", error);
+
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown server error";
+
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: 500 }
+    );
+  }
 
     return NextResponse.json(
       { error: "The product could not be saved. Please try again." },
