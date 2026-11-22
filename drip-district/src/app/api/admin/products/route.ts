@@ -14,20 +14,22 @@ cloudinary.config({
 
 function uploadImage(buffer: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload_stream(
-      {
-        folder: "drip-district/products",
-        resource_type: "image",
-      },
-      (error, result) => {
-        if (error || !result) {
-          reject(error || new Error("Image upload failed"));
-          return;
-        }
+    cloudinary.uploader
+      .upload_stream(
+        {
+          folder: "drip-district/products",
+          resource_type: "image",
+        },
+        (error, result) => {
+          if (error || !result) {
+            reject(error || new Error("Image upload failed"));
+            return;
+          }
 
-        resolve(result.secure_url);
-      }
-    ).end(buffer);
+          resolve(result.secure_url);
+        }
+      )
+      .end(buffer);
   });
 }
 
@@ -45,7 +47,6 @@ export async function POST(request: Request) {
     const title = String(form.get("title") || "").trim();
     const slugInput = String(form.get("slug") || "").trim();
     const category = String(form.get("category") || "").trim();
-    const subcategory = String(form.get("subcategory") || "").trim();
     const description = String(form.get("description") || "").trim();
 
     const allowedCategories = [
@@ -145,7 +146,10 @@ export async function POST(request: Request) {
 
     const imageFiles = form
       .getAll("images")
-      .filter((item): item is File => item instanceof File && item.size > 0);
+      .filter(
+        (item): item is File =>
+          item instanceof File && item.size > 0
+      );
 
     if (imageFiles.length > 8) {
       return NextResponse.redirect(
@@ -157,7 +161,10 @@ export async function POST(request: Request) {
     const imageUrls: string[] = [];
 
     for (const file of imageFiles) {
-      if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+      if (
+        !file.type.startsWith("image/") ||
+        file.size > 10 * 1024 * 1024
+      ) {
         return NextResponse.redirect(
           new URL("/admin/products/new?error=invalid-image", request.url),
           303
@@ -170,11 +177,15 @@ export async function POST(request: Request) {
     }
 
     const uniqueSizes = [
-      ...new Set(variants.map((variant) => variant.size).filter(Boolean)),
+      ...new Set(
+        variants.map((variant) => variant.size).filter(Boolean)
+      ),
     ] as string[];
 
     const uniqueColours = [
-      ...new Set(variants.map((variant) => variant.colour).filter(Boolean)),
+      ...new Set(
+        variants.map((variant) => variant.colour).filter(Boolean)
+      ),
     ] as string[];
 
     await prisma.product.create({
@@ -182,7 +193,6 @@ export async function POST(request: Request) {
         title,
         slug,
         category,
-        subcategory: subcategory || null,
         description,
         images: imageUrls,
         sizes: uniqueSizes,
