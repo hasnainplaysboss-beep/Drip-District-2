@@ -124,7 +124,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const variants = [];
+    const variants: {
+  size: string | null;
+  colour: string | null;
+  deliveryRegion: "UK" | "CHINA";
+  pricePence: number;
+  stock: number;
+}[] = [];
 
     for (let i = 0; i < count; i++) {
       const price = Number(prices[i]);
