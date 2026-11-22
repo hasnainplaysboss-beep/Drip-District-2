@@ -1,0 +1,1 @@
+import Link from 'next/link';export default function Page(){return <main className='wrap section'><header className='header'><Link className='logo' href='/'>♛ DRIP DISTRICT</Link></header><h1>BRANDS</h1><p>Explore our featured labels and brand selection.</p><Link className='btn' href='/shop'>SHOP ALL →</Link></main>}
