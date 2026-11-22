@@ -58,7 +58,6 @@ export default function ProductForm() {
     event: React.ChangeEvent<HTMLInputElement>
   ) {
     const files = Array.from(event.target.files || []);
-
     const urls = files.map((file) => URL.createObjectURL(file));
 
     setPreviews((oldPreviews) => {
@@ -74,7 +73,9 @@ export default function ProductForm() {
     const transfer = new DataTransfer();
 
     Array.from(input.files).forEach((file, i) => {
-      if (i !== index) transfer.items.add(file);
+      if (i !== index) {
+        transfer.items.add(file);
+      }
     });
 
     input.files = transfer.files;
@@ -96,7 +97,9 @@ export default function ProductForm() {
   ) {
     setVariants((current) =>
       current.map((variant) =>
-        variant.id === id ? { ...variant, [field]: value } : variant
+        variant.id === id
+          ? { ...variant, [field]: value }
+          : variant
       )
     );
   }
@@ -113,6 +116,12 @@ export default function ProductForm() {
         stock: "0",
       },
     ]);
+  }
+
+  function removeVariant(id: number) {
+    setVariants((current) =>
+      current.filter((variant) => variant.id !== id)
+    );
   }
 
   function updateSlug(value: string) {
