@@ -58,7 +58,6 @@ export default function ProductForm() {
     const urls = files.map((file) => URL.createObjectURL(file));
 
     setPreviews(urls);
-    setImageCount(files.length);
 
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, [imageCount]);
@@ -100,6 +99,7 @@ export default function ProductForm() {
     if (!input || !input.files) return;
 
     const transfer = new DataTransfer();
+
     Array.from(input.files).forEach((file, i) => {
       if (i !== index) transfer.items.add(file);
     });
@@ -172,15 +172,6 @@ export default function ProductForm() {
       </label>
 
       <label style={labelStyle}>
-        Subcategory
-        <input
-          name="subcategory"
-          style={fieldStyle}
-          placeholder="e.g. Hoodies, Trainers, Watches"
-        />
-      </label>
-
-      <label style={labelStyle}>
         Description
         <textarea
           name="description"
@@ -203,7 +194,9 @@ export default function ProductForm() {
           name="images"
           accept="image/*"
           multiple
-          onChange={() => setImageCount(imageInput.current?.files?.length || 0)}
+          onChange={() =>
+            setImageCount(imageInput.current?.files?.length || 0)
+          }
           style={fieldStyle}
         />
 
@@ -216,7 +209,7 @@ export default function ProductForm() {
             }}
           >
             {previews.map((preview, index) => (
-              <div key={preview} style={{ position: "relative" }}>
+              <div key={preview}>
                 <img
                   src={preview}
                   alt={`Product preview ${index + 1}`}
@@ -250,7 +243,10 @@ export default function ProductForm() {
       </div>
 
       <div style={{ display: "grid", gap: "18px" }}>
-        <h2 style={{ fontSize: "25px", margin: 0 }}>PRODUCT VARIANTS</h2>
+        <h2 style={{ fontSize: "25px", margin: 0 }}>
+          PRODUCT VARIANTS
+        </h2>
+
         <p className="muted">
           Each variant has its own size, colour, delivery, price and stock.
         </p>
