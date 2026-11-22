@@ -1,56 +1,79 @@
 
-export default function SignupPage() {
-  return (
-    <main className="auth-container">
-      <div className="auth-card">
-        <a href="/" className="auth-logo">
-          DRIP DISTRICT
-        </a>
+import { NextResponse } from "next/server";
+import { hash } from "bcryptjs";
+import { prisma } from "@/lib/prisma";
+import { createCustomerSession } from "@/lib/customer-auth";
 
-        <h1>Join the District.</h1>
-        <p>Create your account to get started.</p>
+export async function POST(request: Request) {
+  try {
+    const formData = await request.formData();
 
-        <form action="/api/auth/signup" method="POST">
-          <label>Full name</label>
-          <input
-            type="text"
-            name="name"
-            placeholder="Your full name"
-            required
-          />
+    const name = String(formData.get("name") ?? "").trim();
 
-          <label>Email address</label>
-          <input
-            type="email"
-            name="email"
-            placeholder="you@example.com"
-            required
-          />
+    const email = String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase();
 
-          <label>Password</label>
-          <input
-            type="password"
-            name="password"
-            placeholder="Create a password"
-            minLength={8}
-            required
-          />
+    const password = String(formData.get("password") ?? "");
+    const confirmPassword = String(
+      formData.get("confirmPassword") ?? ""
+    );
 
-          <label>Confirm password</label>
-          <input
-            type="password"
-            name="confirmPassword"
-            placeholder="Confirm your password"
-            required
-          />
+    if (!email || !password || !confirmPassword) {
+      return NextResponse.redirect(
+        new URL("/signup?error=missing", request.url),
+        303
+      );
+    }
 
-          <button type="submit">CREATE ACCOUNT</button>
-        </form>
+    if (password !== confirmPassword) {
+      return NextResponse.redirect(
+        new URL("/signup?error=password-mismatch", request.url),
+        303
+      );
+    }
 
-        <p className="auth-footer">
-          Already have an account? <a href="/login">Sign in</a>
-        </p>
-      </div>
-    </main>
-  );
+    if (password.length < 8 || password.length > 72) {
+      return NextResponse.redirect(
+        new URL("/signup?error=weak-password", request.url),
+        303
+      );
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      return NextResponse.redirect(
+        new URL("/signup?error=email-exists", request.url),
+        303
+      );
+    }
+
+    const passwordHash = await hash(password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        name: name || null,
+        email,
+        passwordHash,
+        role: "CUSTOMER",
+      },
+    });
+
+    await createCustomerSession(user.id, user.email);
+
+    return NextResponse.redirect(
+      new URL("/account", request.url),
+      303
+    );
+  } catch (error) {
+    console.error("Customer signup error:", error);
+
+    return NextResponse.redirect(
+      new URL("/signup?error=server", request.url),
+      303
+    );
+  }
 }
