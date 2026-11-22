@@ -25,13 +25,18 @@ export async function POST(req: Request) {
       where: { email: normalisedEmail },
     });
 
-    if (
-      !user ||
-      user.banned ||
-      user.role !== "ADMIN"
-    ) {
+    if (!user) {
+      console.warn("ADMIN LOGIN: No account found for submitted email.");
       return NextResponse.json(
-        { error: "Invalid admin credentials." },
+        { error: "Invalid email or password." },
+        { status: 401 }
+      );
+    }
+
+    if (user.banned || user.role !== "ADMIN") {
+      console.warn("ADMIN LOGIN: Account is banned or does not have ADMIN role.");
+      return NextResponse.json(
+        { error: "Invalid email or password." },
         { status: 401 }
       );
     }
@@ -42,8 +47,9 @@ export async function POST(req: Request) {
     );
 
     if (!passwordMatches) {
+      console.warn("ADMIN LOGIN: Password comparison failed.");
       return NextResponse.json(
-        { error: "Invalid admin credentials." },
+        { error: "Invalid email or password." },
         { status: 401 }
       );
     }
