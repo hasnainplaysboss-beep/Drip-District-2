@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 type Variant = {
   id: number;
@@ -38,10 +38,11 @@ const labelStyle = {
 
 export default function ProductForm() {
   const imageInput = useRef<HTMLInputElement>(null);
+
   const [previews, setPreviews] = useState<string[]>([]);
-  const [imageCount, setImageCount] = useState(0);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
+
   const [variants, setVariants] = useState<Variant[]>([
     {
       id: 1,
@@ -53,14 +54,40 @@ export default function ProductForm() {
     },
   ]);
 
-  useEffect(() => {
-    const files = Array.from(imageInput.current?.files || []);
+  function handleImageChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const files = Array.from(event.target.files || []);
+
     const urls = files.map((file) => URL.createObjectURL(file));
 
-    setPreviews(urls);
+    setPreviews((oldPreviews) => {
+      oldPreviews.forEach((url) => URL.revokeObjectURL(url));
+      return urls;
+    });
+  }
 
-    return () => urls.forEach((url) => URL.revokeObjectURL(url));
-  }, [imageCount]);
+  function removeImage(index: number) {
+    const input = imageInput.current;
+    if (!input || !input.files) return;
+
+    const transfer = new DataTransfer();
+
+    Array.from(input.files).forEach((file, i) => {
+      if (i !== index) transfer.items.add(file);
+    });
+
+    input.files = transfer.files;
+
+    const urls = Array.from(transfer.files).map((file) =>
+      URL.createObjectURL(file)
+    );
+
+    setPreviews((oldPreviews) => {
+      oldPreviews.forEach((url) => URL.revokeObjectURL(url));
+      return urls;
+    });
+  }
 
   function updateVariant(
     id: number,
@@ -86,26 +113,6 @@ export default function ProductForm() {
         stock: "0",
       },
     ]);
-  }
-
-  function removeVariant(id: number) {
-    setVariants((current) =>
-      current.filter((variant) => variant.id !== id)
-    );
-  }
-
-  function removeImage(index: number) {
-    const input = imageInput.current;
-    if (!input || !input.files) return;
-
-    const transfer = new DataTransfer();
-
-    Array.from(input.files).forEach((file, i) => {
-      if (i !== index) transfer.items.add(file);
-    });
-
-    input.files = transfer.files;
-    setImageCount(transfer.files.length);
   }
 
   function updateSlug(value: string) {
@@ -184,8 +191,9 @@ export default function ProductForm() {
 
       <div style={{ display: "grid", gap: "14px" }}>
         <strong>PRODUCT IMAGES</strong>
+
         <p className="muted">
-          Choose multiple photos from your phone or device.
+          Select photos from your phone gallery.
         </p>
 
         <input
@@ -194,11 +202,13 @@ export default function ProductForm() {
           name="images"
           accept="image/*"
           multiple
-          onChange={() =>
-            setImageCount(imageInput.current?.files?.length || 0)
-          }
+          onChange={handleImageChange}
           style={fieldStyle}
         />
+
+        <p className="muted">
+          {previews.length} images selected
+        </p>
 
         {previews.length > 0 && (
           <div
@@ -212,20 +222,21 @@ export default function ProductForm() {
               <div key={preview}>
                 <img
                   src={preview}
-                  alt={`Product preview ${index + 1}`}
+                  alt={`Product image ${index + 1}`}
                   style={{
                     width: "100%",
-                    height: "150px",
+                    height: "160px",
                     objectFit: "cover",
                     border: "1px solid #ccc",
                   }}
                 />
+
                 <button
                   type="button"
                   onClick={() => removeImage(index)}
                   style={{
                     width: "100%",
-                    padding: "9px",
+                    padding: "10px",
                     background: "#222",
                     color: "#fff",
                     border: 0,
@@ -238,8 +249,6 @@ export default function ProductForm() {
             ))}
           </div>
         )}
-
-        <p className="muted">{imageCount} images selected</p>
       </div>
 
       <div style={{ display: "grid", gap: "18px" }}>
