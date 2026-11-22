@@ -1,0 +1,1 @@
+export default function Page(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">DELIVERY INFORMATION</h1><p>UK and China delivery options are displayed on eligible product pages before checkout. Delivery estimates and any applicable import charges must be confirmed before launch.</p></section>}

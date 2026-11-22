@@ -1,0 +1,1 @@
+export default function Page(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">COOKIE POLICY</h1><p>Configure consent controls for non-essential cookies and analytics before launch.</p></section>}

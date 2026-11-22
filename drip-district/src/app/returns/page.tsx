@@ -1,0 +1,1 @@
+export default function Page(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">RETURNS & REFUNDS</h1><p>Please contact our support team with your order reference to start a return or refund enquiry.</p></section>}

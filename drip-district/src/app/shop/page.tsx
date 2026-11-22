@@ -1,0 +1,6 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { formatGBP } from "@/lib/money";
+export const dynamic = "force-dynamic";
+export default async function Shop(){let products=[];try{products=await prisma.product.findMany({where:{active:true},include:{variants:{where:{active:true}}},orderBy:{createdAt:"desc"}})}catch{}
+ return <><div className="page-intro"><div className="eyebrow">DRIP DISTRICT</div><h1>SHOP ALL</h1><p>Discover the latest clothing, electronics and accessories.</p></div><div className="filter-row"><select aria-label="Category"><option>All categories</option><option>Clothing</option><option>Electronics</option><option>Accessories</option></select><select aria-label="Sort"><option>Newest first</option><option>Price: low to high</option><option>Price: high to low</option></select></div><section className="section"><div className="product-grid">{products.map(p=><Link className="product-card" href={`/product/${p.slug}`} key={p.id}><div className="product-image" style={{backgroundImage:p.images[0]?`url(${p.images[0]})`:undefined}}/><h3>{p.title}</h3><p>{p.variants.length?formatGBP(Math.min(...p.variants.map(v=>v.pricePence))):"Price unavailable"}</p></Link>)}</div>{products.length===0&&<p className="muted">Products will appear here once added in the admin dashboard.</p>}</section></>}

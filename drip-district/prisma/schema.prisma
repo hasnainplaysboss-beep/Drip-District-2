@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum DeliveryRegion {
+  UK
+  CHINA
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         UserRole @default(CUSTOMER)
+  banned       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  orders       Order[]
+  reviews      Review[]
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  description   String   @db.Text
+  category      String
+  subcategory   String?
+  images        String[]
+  colours       String[]
+  sizes         String[]
+  active        Boolean  @default(true)
+  featured      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  variants      ProductVariant[]
+  reviews       Review[]
+}
+
+model ProductVariant {
+  id              String @id @default(cuid())
+  productId       String
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku             String? @unique
+  size            String?
+  colour          String?
+  deliveryRegion  DeliveryRegion
+  pricePence      Int
+  stock           Int @default(0)
+  active          Boolean @default(true)
+  @@unique([productId, size, colour, deliveryRegion])
+}
+
+model Order {
+  id                    String @id @default(cuid())
+  userId                String?
+  user                  User? @relation(fields: [userId], references: [id])
+  email                 String
+  status                OrderStatus @default(PENDING)
+  subtotalPence         Int
+  deliveryPence         Int
+  totalPence            Int
+  stripeSessionId       String? @unique
+  stripePaymentIntentId String?
+  trackingNumber        String?
+  trackingCarrier       String?
+  createdAt             DateTime @default(now())
+  items                 OrderItem[]
+}
+
+model OrderItem {
+  id             String @id @default(cuid())
+  orderId        String
+  order          Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productTitle   String
+  variantLabel   String
+  quantity       Int
+  unitPricePence Int
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Int
+  title      String?
+  body       String   @db.Text
+  verified   Boolean  @default(false)
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  @@unique([productId, userId])
+}
+
+model DiscountCode {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  percentOff     Int
+  expiresAt      DateTime?
+  usageLimit     Int?
+  usedCount      Int      @default(0)
+  active         Boolean  @default(true)
+}

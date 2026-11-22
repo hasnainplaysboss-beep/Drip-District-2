@@ -1,0 +1,1 @@
+export default function Page(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">PRIVACY POLICY</h1><p>Publish a reviewed privacy policy before launch. Explain what customer data is collected, why it is used, retention periods and customer rights.</p></section>}

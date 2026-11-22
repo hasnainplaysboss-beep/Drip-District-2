@@ -1,0 +1,1 @@
+export default function Page(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">WISHLIST</h1><p>Your saved products will appear here when wishlist functionality is connected.</p></section>}

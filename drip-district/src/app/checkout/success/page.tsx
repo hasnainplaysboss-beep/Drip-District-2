@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function Success(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">THANK YOU.</h1><p>Your payment return was received. Your order confirmation will be sent to your email if the payment completed successfully.</p><Link className="outline-button" href="/shop">CONTINUE SHOPPING ↗</Link></section>}

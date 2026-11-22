@@ -1,0 +1,1 @@
+export default function Page(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">FREQUENTLY ASKED QUESTIONS</h1><p>Find answers about orders, payments, delivery and returns.</p></section>}

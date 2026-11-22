@@ -1,0 +1,1 @@
+export default function Page(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">ABOUT DRIP DISTRICT</h1><p>The district of what's next. Discover clothing, electronics and accessories selected for everyday style.</p></section>}

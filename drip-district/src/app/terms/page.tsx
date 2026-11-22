@@ -1,0 +1,1 @@
+export default function Page(){return <section className="section"><div className="eyebrow">DRIP DISTRICT</div><h1 className="section-heading">TERMS & CONDITIONS</h1><p>Publish legally reviewed terms and conditions before accepting orders.</p></section>}
