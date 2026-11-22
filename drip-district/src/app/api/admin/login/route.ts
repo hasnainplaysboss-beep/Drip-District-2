@@ -8,35 +8,30 @@ export async function POST(req: Request) {
   try {
     const { email, password } = await req.json();
 
-    const normalisedEmail = String(email || "")
-      .trim()
-      .toLowerCase();
-
+    const normalisedEmail = String(email || "").trim().toLowerCase();
     const submittedPassword = String(password || "");
-
-    if (!normalisedEmail || !submittedPassword) {
-      return NextResponse.json(
-        { error: "Please enter your email and password." },
-        { status: 400 }
-      );
-    }
 
     const user = await prisma.user.findUnique({
       where: { email: normalisedEmail },
     });
 
     if (!user) {
-      console.warn("ADMIN LOGIN: No account found for submitted email.");
       return NextResponse.json(
-        { error: "Invalid email or password." },
+        { error: "DIAGNOSTIC: EMAIL_NOT_FOUND" },
         { status: 401 }
       );
     }
 
-    if (user.banned || user.role !== "ADMIN") {
-      console.warn("ADMIN LOGIN: Account is banned or does not have ADMIN role.");
+    if (user.banned) {
       return NextResponse.json(
-        { error: "Invalid email or password." },
+        { error: "DIAGNOSTIC: ACCOUNT_BANNED" },
+        { status: 401 }
+      );
+    }
+
+    if (user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "DIAGNOSTIC: NOT_ADMIN" },
         { status: 401 }
       );
     }
@@ -47,9 +42,8 @@ export async function POST(req: Request) {
     );
 
     if (!passwordMatches) {
-      console.warn("ADMIN LOGIN: Password comparison failed.");
       return NextResponse.json(
-        { error: "Invalid email or password." },
+        { error: "DIAGNOSTIC: PASSWORD_MISMATCH" },
         { status: 401 }
       );
     }
@@ -71,7 +65,7 @@ export async function POST(req: Request) {
     console.error("Admin login error:", error);
 
     return NextResponse.json(
-      { error: "Something went wrong on the server." },
+      { error: "SERVER_ERROR" },
       { status: 500 }
     );
   }
