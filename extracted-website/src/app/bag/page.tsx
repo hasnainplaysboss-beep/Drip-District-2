@@ -1,1 +1,0 @@
-import Link from 'next/link';export default function Page(){return <main className='wrap section'><Link className='logo' href='/'>♛ DRIP DISTRICT</Link><h1>YOUR BAG</h1><p>Bag and checkout integration scaffolding. Add items via product page, then connect the cart client and checkout APIs.</p><Link className='btn' href='/shop'>CONTINUE SHOPPING</Link></main>}

@@ -1,1 +1,0 @@
-import {prisma} from '@/lib/db';import {NextResponse} from 'next/server';export async function GET(){try{return NextResponse.json({products:await prisma.product.findMany({where:{active:true},include:{variants:true}})})}catch{return NextResponse.json({error:'Database unavailable'},{status:503})}}
