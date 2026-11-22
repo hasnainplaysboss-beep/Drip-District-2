@@ -12,7 +12,17 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-function uploadImage(buffer: Buffer): Promise<string> {
+const allowedCategories = [
+  "Mens Clothing",
+  "Womens Clothing",
+  "Electronics",
+  "Mens Accessories",
+  "Womens Accessories",
+];
+
+async function uploadImage(file: File): Promise<string> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+
   return new Promise((resolve, reject) => {
     cloudinary.uploader
       .upload_stream(
@@ -22,7 +32,7 @@ function uploadImage(buffer: Buffer): Promise<string> {
         },
         (error, result) => {
           if (error || !result) {
-            reject(error || new Error("Image upload failed"));
+            reject(error || new Error("Image upload failed."));
             return;
           }
 
@@ -33,64 +43,63 @@ function uploadImage(buffer: Buffer): Promise<string> {
   });
 }
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export async function POST(request: Request) {
   try {
     if (!(await isAdmin())) {
-      return NextResponse.redirect(
-        new URL("/admin/login", request.url),
-        303
+      return NextResponse.json(
+        { error: "Admin access required." },
+        { status: 401 }
       );
     }
 
     const form = await request.formData();
 
+    const id = String(form.get("id") || "").trim();
     const title = String(form.get("title") || "").trim();
-    const slugInput = String(form.get("slug") || "").trim();
+    const slug = slugify(String(form.get("slug") || title));
     const category = String(form.get("category") || "").trim();
     const description = String(form.get("description") || "").trim();
 
-    const allowedCategories = [
-      "Mens Clothing",
-      "Womens Clothing",
-      "Electronics",
-      "Mens Accessories",
-      "Womens Accessories",
-    ];
-
     if (
       !title ||
-      !slugInput ||
+      !slug ||
       !allowedCategories.includes(category) ||
       !description
     ) {
-      return NextResponse.redirect(
-        new URL("/admin/products/new?error=invalid", request.url),
-        303
+      return NextResponse.json(
+        { error: "Please complete the product name, slug, category and description." },
+        { status: 400 }
       );
     }
 
-    const slug = slugInput
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+    const existingProduct = id
+      ? await prisma.product.findUnique({ where: { id } })
+      : null;
 
-    if (!slug) {
-      return NextResponse.redirect(
-        new URL("/admin/products/new?error=invalid", request.url),
-        303
+    if (id && !existingProduct) {
+      return NextResponse.json(
+        { error: "Product not found." },
+        { status: 404 }
       );
     }
 
-    const existing = await prisma.product.findUnique({
+    const slugOwner = await prisma.product.findUnique({
       where: { slug },
     });
 
-    if (existing) {
-      return NextResponse.redirect(
-        new URL("/admin/products/new?error=slug-exists", request.url),
-        303
+    if (slugOwner && slugOwner.id !== id) {
+      return NextResponse.json(
+        { error: "That product URL slug is already in use." },
+        { status: 409 }
       );
     }
 
@@ -109,9 +118,9 @@ export async function POST(request: Request) {
       prices.length !== count ||
       stocks.length !== count
     ) {
-      return NextResponse.redirect(
-        new URL("/admin/products/new?error=variants", request.url),
-        303
+      return NextResponse.json(
+        { error: "Please add at least one complete product variant." },
+        { status: 400 }
       );
     }
 
@@ -129,9 +138,9 @@ export async function POST(request: Request) {
         stock < 0 ||
         !["UK", "CHINA"].includes(delivery)
       ) {
-        return NextResponse.redirect(
-          new URL("/admin/products/new?error=variants", request.url),
-          303
+        return NextResponse.json(
+          { error: "Check your variant prices, stock and delivery regions." },
+          { status: 400 }
         );
       }
 
@@ -144,6 +153,17 @@ export async function POST(request: Request) {
       });
     }
 
+    const existingImages = form
+      .getAll("existingImages")
+      .map(String);
+
+    // Only allow images that already belong to this product.
+    const keptImages = existingProduct
+      ? existingImages.filter((url) =>
+          existingProduct.images.includes(url)
+        )
+      : [];
+
     const imageFiles = form
       .getAll("images")
       .filter(
@@ -151,70 +171,150 @@ export async function POST(request: Request) {
           item instanceof File && item.size > 0
       );
 
-    if (imageFiles.length > 8) {
-      return NextResponse.redirect(
-        new URL("/admin/products/new?error=too-many-images", request.url),
-        303
+    if (keptImages.length + imageFiles.length > 8) {
+      return NextResponse.json(
+        { error: "A product can have a maximum of 8 images." },
+        { status: 400 }
       );
     }
-
-    const imageUrls: string[] = [];
 
     for (const file of imageFiles) {
       if (
         !file.type.startsWith("image/") ||
         file.size > 10 * 1024 * 1024
       ) {
-        return NextResponse.redirect(
-          new URL("/admin/products/new?error=invalid-image", request.url),
-          303
+        return NextResponse.json(
+          { error: "Each image must be an image file smaller than 10MB." },
+          { status: 400 }
         );
       }
-
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const imageUrl = await uploadImage(buffer);
-      imageUrls.push(imageUrl);
     }
 
+    if (imageFiles.length > 0) {
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+      if (!cloudName || !apiKey || !apiSecret) {
+        return NextResponse.json(
+          { error: "Cloudinary settings are missing." },
+          { status: 500 }
+        );
+      }
+    }
+
+    const newImageUrls: string[] = [];
+
+    for (const file of imageFiles) {
+      newImageUrls.push(await uploadImage(file));
+    }
+
+    const images = [...keptImages, ...newImageUrls];
+
     const uniqueSizes = [
-      ...new Set(
-        variants.map((variant) => variant.size).filter(Boolean)
-      ),
+      ...new Set(variants.map((variant) => variant.size).filter(Boolean)),
     ] as string[];
 
     const uniqueColours = [
-      ...new Set(
-        variants.map((variant) => variant.colour).filter(Boolean)
-      ),
+      ...new Set(variants.map((variant) => variant.colour).filter(Boolean)),
     ] as string[];
 
-    await prisma.product.create({
-      data: {
-        title,
-        slug,
-        category,
-        description,
-        images: imageUrls,
-        sizes: uniqueSizes,
-        colours: uniqueColours,
-        featured: form.get("featured") === "true",
-        active: form.get("active") === "true",
-        variants: {
-          create: variants,
+    const productData = {
+      title,
+      slug,
+      category,
+      description,
+      images,
+      sizes: uniqueSizes,
+      colours: uniqueColours,
+      featured: form.get("featured") === "true",
+      active: form.get("active") === "true",
+    };
+
+    const product = await prisma.$transaction(async (tx) => {
+      if (existingProduct) {
+        await tx.product.update({
+          where: { id },
+          data: productData,
+        });
+
+        await tx.productVariant.deleteMany({
+          where: { productId: id },
+        });
+
+        return tx.product.update({
+          where: { id },
+          data: {
+            variants: { create: variants },
+          },
+          include: { variants: true },
+        });
+      }
+
+      return tx.product.create({
+        data: {
+          ...productData,
+          variants: { create: variants },
         },
-      },
+        include: { variants: true },
+      });
     });
 
-    return NextResponse.redirect(
-      new URL("/admin/products?created=1", request.url),
-      303
-    );
+    return NextResponse.json({
+      success: true,
+      product,
+    });
   } catch (error) {
-    console.error("Product creation error:", error);
+    console.error("PRODUCT SAVE ERROR:", error);
 
-    return NextResponse.redirect(
-      new URL("/admin/products/new?error=server", request.url),
-      303
+    return NextResponse.json(
+      { error: "The product could not be saved. Please try again." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    if (!(await isAdmin())) {
+      return NextResponse.json(
+        { error: "Admin access required." },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const id = String(body.id || "").trim();
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Product ID is required." },
+        { status: 400 }
+      );
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!product) {
+      return NextResponse.json(
+        { error: "Product not found." },
+        { status: 404 }
+      );
+    }
+
+    await prisma.product.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("PRODUCT DELETE ERROR:", error);
+
+    return NextResponse.json(
+      { error: "The product could not be deleted." },
+      { status: 500 }
     );
   }
 }
