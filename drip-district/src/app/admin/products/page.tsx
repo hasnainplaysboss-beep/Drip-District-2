@@ -1,8 +1,10 @@
 
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import ProductActions from "./ProductActions";
 
 function formatPrice(pence: number) {
   return `£${(pence / 100).toFixed(2)}`;
@@ -91,27 +93,32 @@ export default async function ProductsPage() {
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              minWidth: "650px",
+              minWidth: "850px",
               textAlign: "left",
             }}
           >
             <thead>
               <tr>
-                {["PRODUCT", "CATEGORY", "PRICE", "STOCK", "STATUS"].map(
-                  (heading) => (
-                    <th
-                      key={heading}
-                      style={{
-                        padding: "16px 12px",
-                        borderBottom: "1px solid #555",
-                        fontSize: "12px",
-                        letterSpacing: "1px",
-                      }}
-                    >
-                      {heading}
-                    </th>
-                  )
-                )}
+                {[
+                  "PRODUCT",
+                  "CATEGORY",
+                  "PRICE",
+                  "STOCK",
+                  "STATUS",
+                  "ACTIONS",
+                ].map((heading) => (
+                  <th
+                    key={heading}
+                    style={{
+                      padding: "16px 12px",
+                      borderBottom: "1px solid #555",
+                      fontSize: "12px",
+                      letterSpacing: "1px",
+                    }}
+                  >
+                    {heading}
+                  </th>
+                ))}
               </tr>
             </thead>
 
@@ -189,6 +196,15 @@ export default async function ProductsPage() {
                           FEATURED
                         </div>
                       )}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: "18px 12px",
+                        borderBottom: "1px solid #333",
+                      }}
+                    >
+                      <ProductActions productId={product.id} />
                     </td>
                   </tr>
                 );
