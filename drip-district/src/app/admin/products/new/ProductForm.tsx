@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 
 type Variant = {
   id: number;
@@ -10,6 +11,29 @@ type Variant = {
   delivery: string;
   price: string;
   stock: string;
+};
+
+type ExistingProduct = {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  description: string;
+  images: string[];
+  featured: boolean;
+  active: boolean;
+  variants: {
+    size: string | null;
+    colour: string | null;
+    deliveryRegion: string;
+    pricePence: number;
+    stock: number;
+  }[];
+};
+
+type SelectedImage = {
+  file: File;
+  preview: string;
 };
 
 const categories = [
@@ -22,8 +46,8 @@ const categories = [
 
 const fieldStyle = {
   width: "100%",
-  padding: "15px",
-  border: "1px solid #ccc",
+  padding: "14px",
+  border: "1px solid #777",
   background: "#fff",
   color: "#111",
   fontSize: "16px",
@@ -32,62 +56,144 @@ const fieldStyle = {
 
 const labelStyle = {
   display: "grid",
-  gap: "10px",
+  gap: "9px",
   fontWeight: 600,
 };
 
-export default function ProductForm() {
+function makeSlug(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function makeVariant(id: number): Variant {
+  return {
+    id,
+    size: "",
+    colour: "",
+    delivery: "UK",
+    price: "35",
+    stock: "0",
+  };
+}
+
+export default function ProductForm({
+  initialProduct,
+}: {
+  initialProduct?: ExistingProduct;
+}) {
+  const router = useRouter();
   const imageInput = useRef<HTMLInputElement>(null);
 
-  const [previews, setPreviews] = useState<string[]>([]);
-  const [title, setTitle] = useState("");
-  const [slug, setSlug] = useState("");
+  const [title, setTitle] = useState(initialProduct?.title || "");
+  const [slug, setSlug] = useState(initialProduct?.slug || "");
+  const [category, setCategory] = useState(
+    initialProduct?.category || "Mens Clothing"
+  );
+  const [description, setDescription] = useState(
+    initialProduct?.description || ""
+  );
 
-  const [variants, setVariants] = useState<Variant[]>([
-    {
-      id: 1,
-      size: "",
-      colour: "",
-      delivery: "UK",
-      price: "",
-      stock: "0",
-    },
-  ]);
+  const [existingImages, setExistingImages] = useState<string[]>(
+    initialProduct?.images || []
+  );
 
-  function handleImageChange(
-    event: React.ChangeEvent<HTMLInputElement>
-  ) {
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+
+  const [variants, setVariants] = useState<Variant[]>(
+    initialProduct?.variants?.length
+      ? initialProduct.variants.map((variant, index) => ({
+          id: index + 1,
+          size: variant.size || "",
+          colour: variant.colour || "",
+          delivery: variant.deliveryRegion,
+          price: (variant.pricePence / 100).toFixed(2),
+          stock: String(variant.stock),
+        }))
+      : [makeVariant(1)]
+  );
+
+  const [featured, setFeatured] = useState(
+    initialProduct?.featured || false
+  );
+  const [active, setActive] = useState(
+    initialProduct ? initialProduct.active : true
+  );
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const isEditing = Boolean(initialProduct);
+
+  async function chooseImages(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
-    const urls = files.map((file) => URL.createObjectURL(file));
 
-    setPreviews((oldPreviews) => {
-      oldPreviews.forEach((url) => URL.revokeObjectURL(url));
-      return urls;
-    });
+    if (!files.length) return;
+
+    const remainingSlots =
+      8 - existingImages.length - selectedImages.length;
+
+    if (files.length > remainingSlots) {
+      setMessage("You can add a maximum of 8 images per product.");
+      event.target.value = "";
+      return;
+    }
+
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        setMessage("Please choose image files only.");
+        event.target.value = "";
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        setMessage("Each image must be smaller than 10MB.");
+        event.target.value = "";
+        return;
+      }
+    }
+
+    try {
+      const newImages = await Promise.all(
+        files.map(
+          (file) =>
+            new Promise<SelectedImage>((resolve, reject) => {
+              const reader = new FileReader();
+
+              reader.onload = () => {
+                resolve({
+                  file,
+                  preview: String(reader.result),
+                });
+              };
+
+              reader.onerror = () => reject(new Error("Could not preview image."));
+              reader.readAsDataURL(file);
+            })
+        )
+      );
+
+      setSelectedImages((current) => [...current, ...newImages]);
+      setMessage("");
+    } catch {
+      setMessage("Could not preview your selected photos. Please try again.");
+    }
+
+    event.target.value = "";
   }
 
-  function removeImage(index: number) {
-    const input = imageInput.current;
-    if (!input || !input.files) return;
-
-    const transfer = new DataTransfer();
-
-    Array.from(input.files).forEach((file, i) => {
-      if (i !== index) {
-        transfer.items.add(file);
-      }
-    });
-
-    input.files = transfer.files;
-
-    const urls = Array.from(transfer.files).map((file) =>
-      URL.createObjectURL(file)
+  function removeExistingImage(index: number) {
+    setExistingImages((current) =>
+      current.filter((_, imageIndex) => imageIndex !== index)
     );
+  }
 
-    setPreviews((oldPreviews) => {
-      oldPreviews.forEach((url) => URL.revokeObjectURL(url));
-      return urls;
-    });
+  function removeSelectedImage(index: number) {
+    setSelectedImages((current) =>
+      current.filter((_, imageIndex) => imageIndex !== index)
+    );
   }
 
   function updateVariant(
@@ -107,14 +213,7 @@ export default function ProductForm() {
   function addVariant() {
     setVariants((current) => [
       ...current,
-      {
-        id: Math.max(0, ...current.map((item) => item.id)) + 1,
-        size: "",
-        colour: "",
-        delivery: "UK",
-        price: "",
-        stock: "0",
-      },
+      makeVariant(Math.max(0, ...current.map((item) => item.id)) + 1),
     ]);
   }
 
@@ -124,35 +223,117 @@ export default function ProductForm() {
     );
   }
 
-  function updateSlug(value: string) {
-    return value
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+  async function saveProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+
+    if (!title.trim() || !slug.trim() || !description.trim()) {
+      setMessage("Please complete the product name, slug and description.");
+      return;
+    }
+
+    if (existingImages.length + selectedImages.length > 8) {
+      setMessage("A product can have a maximum of 8 images.");
+      return;
+    }
+
+    if (variants.length === 0) {
+      setMessage("Please add at least one product variant.");
+      return;
+    }
+
+    for (const variant of variants) {
+      if (
+        !variant.price ||
+        !variant.stock ||
+        !Number.isFinite(Number(variant.price)) ||
+        Number(variant.price) <= 0 ||
+        !Number.isInteger(Number(variant.stock)) ||
+        Number(variant.stock) < 0
+      ) {
+        setMessage("Please check every variant's price and stock quantity.");
+        return;
+      }
+    }
+
+    setSaving(true);
+
+    try {
+      const form = new FormData();
+
+      if (initialProduct?.id) {
+        form.append("id", initialProduct.id);
+      }
+
+      form.append("title", title.trim());
+      form.append("slug", slug.trim());
+      form.append("category", category);
+      form.append("description", description.trim());
+      form.append("featured", String(featured));
+      form.append("active", String(active));
+
+      existingImages.forEach((url) => {
+        form.append("existingImages", url);
+      });
+
+      selectedImages.forEach((image) => {
+        form.append("images", image.file);
+      });
+
+      variants.forEach((variant) => {
+        form.append("variantSize", variant.size);
+        form.append("variantColour", variant.colour);
+        form.append("variantDelivery", variant.delivery);
+        form.append("variantPrice", variant.price);
+        form.append("variantStock", variant.stock);
+      });
+
+      const response = await fetch("/api/admin/products", {
+        method: "POST",
+        body: form,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setMessage(result.error || "Could not save the product.");
+        return;
+      }
+
+      router.push(
+        isEditing
+          ? "/admin/products?updated=1"
+          : "/admin/products?created=1"
+      );
+
+      router.refresh();
+    } catch (error) {
+      console.error("PRODUCT FORM ERROR:", error);
+      setMessage("Something went wrong. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <form
-      action="/api/admin/products"
-      method="POST"
-      encType="multipart/form-data"
+      onSubmit={saveProduct}
       style={{
         display: "grid",
-        gap: "26px",
+        gap: "24px",
         maxWidth: "750px",
-        marginTop: "35px",
+        marginTop: "30px",
       }}
     >
       <label style={labelStyle}>
         Product name
         <input
-          name="title"
           value={title}
           onChange={(event) => {
             setTitle(event.target.value);
-            setSlug(updateSlug(event.target.value));
+            if (!isEditing) {
+              setSlug(makeSlug(event.target.value));
+            }
           }}
           style={fieldStyle}
           placeholder="e.g. District Oversized Hoodie"
@@ -161,12 +342,12 @@ export default function ProductForm() {
       </label>
 
       <label style={labelStyle}>
-        URL slug
+        Product URL slug
         <input
-          name="slug"
           value={slug}
-          onChange={(event) => setSlug(event.target.value)}
+          onChange={(event) => setSlug(makeSlug(event.target.value))}
           style={fieldStyle}
+          placeholder="district-oversized-hoodie"
           required
         />
       </label>
@@ -174,109 +355,145 @@ export default function ProductForm() {
       <label style={labelStyle}>
         Category
         <select
-          name="category"
-          required
-          defaultValue="Mens Clothing"
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
           style={fieldStyle}
+          required
         >
-          {categories.map((category) => (
-            <option key={category} value={category}>
-              {category}
+          {categories.map((item) => (
+            <option key={item} value={item}>
+              {item}
             </option>
           ))}
         </select>
       </label>
 
       <label style={labelStyle}>
-        Description
+        Product description
         <textarea
-          name="description"
-          required
-          rows={5}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
           style={fieldStyle}
+          rows={5}
           placeholder="Describe your product..."
+          required
         />
       </label>
 
-      <div style={{ display: "grid", gap: "14px" }}>
-        <strong>PRODUCT IMAGES</strong>
+      <section style={{ display: "grid", gap: "14px" }}>
+        <h2 style={{ margin: 0 }}>PRODUCT PHOTOS</h2>
 
         <p className="muted">
-          Select photos from your phone gallery.
+          Choose photos from your phone gallery or Files. You can select
+          multiple photos.
         </p>
 
         <input
           ref={imageInput}
           type="file"
-          name="images"
           accept="image/*"
           multiple
-          onChange={handleImageChange}
+          onChange={chooseImages}
           style={fieldStyle}
         />
 
         <p className="muted">
-          {previews.length} images selected
+          {existingImages.length + selectedImages.length} of 8 photos selected
         </p>
 
-        {previews.length > 0 && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "12px",
-            }}
-          >
-            {previews.map((preview, index) => (
-              <div key={preview}>
-                <img
-                  src={preview}
-                  alt={`Product image ${index + 1}`}
-                  style={{
-                    width: "100%",
-                    height: "160px",
-                    objectFit: "cover",
-                    border: "1px solid #ccc",
-                  }}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => removeImage(index)}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    background: "#222",
-                    color: "#fff",
-                    border: 0,
-                    marginTop: "5px",
-                  }}
-                >
-                  REMOVE IMAGE
-                </button>
-              </div>
-            ))}
-          </div>
+        {existingImages.length > 0 && (
+          <>
+            <strong>EXISTING PHOTOS</strong>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "12px",
+              }}
+            >
+              {existingImages.map((url, index) => (
+                <div key={url}>
+                  <img
+                    src={url}
+                    alt={`Existing product photo ${index + 1}`}
+                    style={{
+                      width: "100%",
+                      height: "160px",
+                      objectFit: "cover",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeExistingImage(index)}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      marginTop: "5px",
+                    }}
+                  >
+                    REMOVE PHOTO
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
         )}
-      </div>
 
-      <div style={{ display: "grid", gap: "18px" }}>
-        <h2 style={{ fontSize: "25px", margin: 0 }}>
-          PRODUCT VARIANTS
-        </h2>
+        {selectedImages.length > 0 && (
+          <>
+            <strong>NEW PHOTOS</strong>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "12px",
+              }}
+            >
+              {selectedImages.map((image, index) => (
+                <div key={`${image.file.name}-${index}`}>
+                  <img
+                    src={image.preview}
+                    alt={`New product photo ${index + 1}`}
+                    style={{
+                      width: "100%",
+                      height: "160px",
+                      objectFit: "cover",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedImage(index)}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      marginTop: "5px",
+                    }}
+                  >
+                    REMOVE PHOTO
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section style={{ display: "grid", gap: "16px" }}>
+        <h2 style={{ margin: 0 }}>PRODUCT VARIANTS</h2>
 
         <p className="muted">
-          Each variant has its own size, colour, delivery, price and stock.
+          Add each size, colour and delivery combination with its own price
+          and stock quantity.
         </p>
 
         {variants.map((variant, index) => (
           <div
             key={variant.id}
             style={{
-              border: "1px solid #ccc",
+              border: "1px solid #777",
               padding: "18px",
               display: "grid",
-              gap: "15px",
+              gap: "14px",
             }}
           >
             <strong>VARIANT {index + 1}</strong>
@@ -284,36 +501,33 @@ export default function ProductForm() {
             <label style={labelStyle}>
               Size
               <input
-                name="variantSize"
                 value={variant.size}
-                onChange={(e) =>
-                  updateVariant(variant.id, "size", e.target.value)
+                onChange={(event) =>
+                  updateVariant(variant.id, "size", event.target.value)
                 }
                 style={fieldStyle}
-                placeholder="Medium or One Size"
+                placeholder="Small, Medium, UK 9 or One Size"
               />
             </label>
 
             <label style={labelStyle}>
               Colour
               <input
-                name="variantColour"
                 value={variant.colour}
-                onChange={(e) =>
-                  updateVariant(variant.id, "colour", e.target.value)
+                onChange={(event) =>
+                  updateVariant(variant.id, "colour", event.target.value)
                 }
                 style={fieldStyle}
-                placeholder="Black"
+                placeholder="Black, White, Grey"
               />
             </label>
 
             <label style={labelStyle}>
-              Delivery
+              Delivery region
               <select
-                name="variantDelivery"
                 value={variant.delivery}
-                onChange={(e) =>
-                  updateVariant(variant.id, "delivery", e.target.value)
+                onChange={(event) =>
+                  updateVariant(variant.id, "delivery", event.target.value)
                 }
                 style={fieldStyle}
               >
@@ -325,33 +539,30 @@ export default function ProductForm() {
             <label style={labelStyle}>
               Price (£)
               <input
-                name="variantPrice"
                 type="number"
                 min="0.01"
                 step="0.01"
-                required
                 value={variant.price}
-                onChange={(e) =>
-                  updateVariant(variant.id, "price", e.target.value)
+                onChange={(event) =>
+                  updateVariant(variant.id, "price", event.target.value)
                 }
                 style={fieldStyle}
-                placeholder="39.99"
+                required
               />
             </label>
 
             <label style={labelStyle}>
               Stock quantity
               <input
-                name="variantStock"
                 type="number"
                 min="0"
                 step="1"
-                required
                 value={variant.stock}
-                onChange={(e) =>
-                  updateVariant(variant.id, "stock", e.target.value)
+                onChange={(event) =>
+                  updateVariant(variant.id, "stock", event.target.value)
                 }
                 style={fieldStyle}
+                required
               />
             </label>
 
@@ -359,12 +570,7 @@ export default function ProductForm() {
               type="button"
               onClick={() => removeVariant(variant.id)}
               disabled={variants.length === 1}
-              style={{
-                padding: "13px",
-                background: "#eee",
-                color: "#111",
-                border: "1px solid #999",
-              }}
+              style={{ padding: "12px" }}
             >
               REMOVE VARIANT
             </button>
@@ -374,46 +580,55 @@ export default function ProductForm() {
         <button
           type="button"
           onClick={addVariant}
-          style={{
-            padding: "18px",
-            background: "#e8e8e8",
-            color: "#111",
-            border: 0,
-            fontWeight: "bold",
-          }}
+          style={{ padding: "15px" }}
         >
           + ADD ANOTHER VARIANT
         </button>
-      </div>
+      </section>
 
       <label style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-        <input type="checkbox" name="featured" value="true" />
-        Feature on homepage
+        <input
+          type="checkbox"
+          checked={featured}
+          onChange={(event) => setFeatured(event.target.checked)}
+        />
+        Feature this product on the homepage
       </label>
 
       <label style={{ display: "flex", gap: "12px", alignItems: "center" }}>
         <input
           type="checkbox"
-          name="active"
-          value="true"
-          defaultChecked
+          checked={active}
+          onChange={(event) => setActive(event.target.checked)}
         />
-        Published / visible in shop
+        Published / visible in the shop
       </label>
+
+      {message && (
+        <p role="alert" style={{ color: "#c62828", fontWeight: "bold" }}>
+          {message}
+        </p>
+      )}
 
       <button
         type="submit"
+        disabled={saving}
         style={{
-          padding: "20px",
+          padding: "19px",
           background: "#111",
           color: "#fff",
           border: 0,
           fontWeight: "bold",
-          letterSpacing: "2px",
+          letterSpacing: "1px",
           fontSize: "16px",
+          opacity: saving ? 0.6 : 1,
         }}
       >
-        SAVE PRODUCT
+        {saving
+          ? "SAVING PRODUCT..."
+          : isEditing
+            ? "UPDATE PRODUCT"
+            : "SAVE PRODUCT"}
       </button>
     </form>
   );
