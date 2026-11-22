@@ -20,6 +20,14 @@ const allowedCategories = [
   "Womens Accessories",
 ];
 
+type ProductVariantInput = {
+  size: string | null;
+  colour: string | null;
+  deliveryRegion: "UK" | "CHINA";
+  pricePence: number;
+  stock: number;
+};
+
 async function uploadImage(file: File): Promise<string> {
   const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -31,8 +39,13 @@ async function uploadImage(file: File): Promise<string> {
           resource_type: "image",
         },
         (error, result) => {
-          if (error || !result) {
-            reject(error || new Error("Image upload failed."));
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          if (!result?.secure_url) {
+            reject(new Error("Cloudinary did not return an image URL."));
             return;
           }
 
@@ -76,7 +89,10 @@ export async function POST(request: Request) {
       !description
     ) {
       return NextResponse.json(
-        { error: "Please complete the product name, slug, category and description." },
+        {
+          error:
+            "Please complete the product name, slug, category and description.",
+        },
         { status: 400 }
       );
     }
@@ -124,13 +140,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const variants: {
-  size: string | null;
-  colour: string | null;
-  deliveryRegion: "UK" | "CHINA";
-  pricePence: number;
-  stock: number;
-}[] = [];
+    const variants: ProductVariantInput[] = [];
 
     for (let i = 0; i < count; i++) {
       const price = Number(prices[i]);
@@ -145,7 +155,10 @@ export async function POST(request: Request) {
         !["UK", "CHINA"].includes(delivery)
       ) {
         return NextResponse.json(
-          { error: "Check your variant prices, stock and delivery regions." },
+          {
+            error:
+              "Check your variant prices, stock and delivery regions.",
+          },
           { status: 400 }
         );
       }
@@ -163,7 +176,6 @@ export async function POST(request: Request) {
       .getAll("existingImages")
       .map(String);
 
-    // Only allow images that already belong to this product.
     const keptImages = existingProduct
       ? existingImages.filter((url) =>
           existingProduct.images.includes(url)
@@ -190,20 +202,26 @@ export async function POST(request: Request) {
         file.size > 10 * 1024 * 1024
       ) {
         return NextResponse.json(
-          { error: "Each image must be an image file smaller than 10MB." },
+          {
+            error:
+              "Each image must be an image file smaller than 10MB.",
+          },
           { status: 400 }
         );
       }
     }
 
     if (imageFiles.length > 0) {
-      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-      const apiKey = process.env.CLOUDINARY_API_KEY;
-      const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
-      if (!cloudName || !apiKey || !apiSecret) {
+      if (
+        !process.env.CLOUDINARY_CLOUD_NAME ||
+        !process.env.CLOUDINARY_API_KEY ||
+        !process.env.CLOUDINARY_API_SECRET
+      ) {
         return NextResponse.json(
-          { error: "Cloudinary settings are missing." },
+          {
+            error:
+              "Cloudinary settings are missing. Check your Vercel environment variables.",
+          },
           { status: 500 }
         );
       }
@@ -212,17 +230,22 @@ export async function POST(request: Request) {
     const newImageUrls: string[] = [];
 
     for (const file of imageFiles) {
-      newImageUrls.push(await uploadImage(file));
+      const imageUrl = await uploadImage(file);
+      newImageUrls.push(imageUrl);
     }
 
     const images = [...keptImages, ...newImageUrls];
 
     const uniqueSizes = [
-      ...new Set(variants.map((variant) => variant.size).filter(Boolean)),
+      ...new Set(
+        variants.map((variant) => variant.size).filter(Boolean)
+      ),
     ] as string[];
 
     const uniqueColours = [
-      ...new Set(variants.map((variant) => variant.colour).filter(Boolean)),
+      ...new Set(
+        variants.map((variant) => variant.colour).filter(Boolean)
+      ),
     ] as string[];
 
     const productData = {
@@ -251,18 +274,26 @@ export async function POST(request: Request) {
         return tx.product.update({
           where: { id },
           data: {
-            variants: { create: variants },
+            variants: {
+              create: variants,
+            },
           },
-          include: { variants: true },
+          include: {
+            variants: true,
+          },
         });
       }
 
       return tx.product.create({
         data: {
           ...productData,
-          variants: { create: variants },
+          variants: {
+            create: variants,
+          },
         },
-        include: { variants: true },
+        include: {
+          variants: true,
+        },
       });
     });
 
@@ -270,20 +301,18 @@ export async function POST(request: Request) {
       success: true,
       product,
     });
-   } catch (error) {
+  } catch (error) {
     console.error("PRODUCT SAVE ERROR:", error);
 
     const errorMessage =
-      error instanceof Error ? error.message : "Unknown server error";
+      error instanceof Error
+        ? error.message
+        : "Unknown server error.";
 
     return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
-  }
-
-    return NextResponse.json(
-      { error: "The product could not be saved. Please try again." },
+      {
+        error: errorMessage,
+      },
       { status: 500 }
     );
   }
@@ -327,8 +356,13 @@ export async function DELETE(request: Request) {
   } catch (error) {
     console.error("PRODUCT DELETE ERROR:", error);
 
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Unknown server error.";
+
     return NextResponse.json(
-      { error: "The product could not be deleted." },
+      { error: errorMessage },
       { status: 500 }
     );
   }
