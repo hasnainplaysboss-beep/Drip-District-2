@@ -1,3 +1,4 @@
+import "./auth-pages.css";
 import type { Metadata } from "next";
 import "./globals.css";
 import { CartProvider } from "@/components/cart/CartProvider";
