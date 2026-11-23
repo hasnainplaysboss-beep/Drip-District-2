@@ -46,7 +46,7 @@ export function Header() {
             <Search />
           </Link>
 
-          <Link href="/login" aria-label="Account">
+          <Link href="/account" aria-label="My Account">
             <UserRound />
           </Link>
 
@@ -79,7 +79,7 @@ export function Header() {
             "/accessories/womens",
             "/about",
             "/contact",
-            "/login",
+            "/account",
           ].map((href) => (
             <Link
               onClick={() => setOpen(false)}
@@ -135,7 +135,7 @@ export function Footer() {
               <Link href="/clothing">Clothing</Link>
               <Link href="/electronics">Electronics</Link>
               <Link href="/accessories">Accessories</Link>
-              <Link href="/login">My account</Link>
+              <Link href="/account">My account</Link>
               <Link href="/wishlist">Wishlist</Link>
             </div>
           )}
