@@ -1,46 +1,51 @@
-
 "use client";
 
 import { useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { formatGBP } from "@/lib/money";
 
-type DeliveryOption = "STANDARD" | "NEXT_DAY";
+type DeliveryOption = "STANDARD" | "NEXT_DAY" | "CHINA";
 
 export default function Checkout() {
   const { items } = useCart();
   const [email, setEmail] = useState("");
-  const [deliveryOption, setDeliveryOption] =
-    useState<DeliveryOption>("STANDARD");
+  const [deliveryOption, setDeliveryOption] = useState<DeliveryOption>("STANDARD");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const subtotal = items.reduce(
-    (n, i) => n + i.price * i.quantity,
-    0
-  );
-
+  const subtotal = items.reduce((n, i) => n + i.price * i.quantity, 0);
   const freeStandardDelivery = subtotal >= 7500;
 
   const deliveryCost =
-    deliveryOption === "NEXT_DAY"
-      ? 499
-      : freeStandardDelivery
-        ? 0
-        : 399;
+    deliveryOption === "CHINA"
+      ? 0
+      : deliveryOption === "NEXT_DAY"
+        ? 499
+        : freeStandardDelivery
+          ? 0
+          : 399;
 
   const total = subtotal + deliveryCost;
 
   async function pay() {
-    setBusy(true);
     setMessage("");
 
+    if (!email.trim() || !email.includes("@")) {
+      setMessage("Please enter a valid email address.");
+      return;
+    }
+
+    if (!items.length) {
+      setMessage("Your basket is empty.");
+      return;
+    }
+
+    setBusy(true);
+
     try {
-      const r = await fetch("/api/checkout", {
+      const response = await fetch("/api/checkout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
           deliveryOption,
@@ -51,141 +56,166 @@ export default function Checkout() {
         }),
       });
 
-      const d = await r.json();
+      const data = await response.json();
 
-      if (!r.ok) {
-        throw new Error(d.error || "Checkout unavailable");
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to start checkout.");
       }
 
-      if (d.url) {
-        window.location.href = d.url;
+      if (data.url) {
+        window.location.href = data.url;
       } else {
-        throw new Error("Payment session was not created.");
+        throw new Error("Checkout link was not returned.");
       }
     } catch (e) {
-      setMessage(
-        e instanceof Error
-          ? e.message
-          : "Unable to start checkout."
-      );
-    } finally {
+      setMessage(e instanceof Error ? e.message : "Something went wrong.");
       setBusy(false);
     }
   }
 
   return (
     <section className="section">
-      <div className="eyebrow">SECURE CHECKOUT</div>
-      <h1 className="section-heading">CHECKOUT</h1>
+      <div className="page-intro">
+        <div className="eyebrow">DRIP DISTRICT</div>
+        <h1>CHECKOUT</h1>
+      </div>
 
-      <div className="simple-form">
-        <label>
-          Email for order updates
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="you@example.com"
-          />
-        </label>
+      <div className="simple-card" style={{ maxWidth: 700, margin: "0 auto" }}>
+        <label htmlFor="checkout-email">Email address</label>
+        <input
+          id="checkout-email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          required
+          style={{ width: "100%", margin: "12px 0 24px", padding: 12 }}
+        />
 
-        <h2>DELIVERY OPTIONS</h2>
+        <h2>Delivery method</h2>
 
-        <label
-          style={{
-            display: "flex",
-            gap: "12px",
-            alignItems: "flex-start",
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="radio"
-            name="delivery"
-            checked={deliveryOption === "STANDARD"}
-            onChange={() => setDeliveryOption("STANDARD")}
-          />
-
-          <span>
-            <strong>Standard Delivery</strong>
-            <br />
-            <small>2–5 working days</small>
-            <br />
-            <strong>
-              {freeStandardDelivery
-                ? "FREE"
-                : formatGBP(399)}
-            </strong>
-            {freeStandardDelivery && (
+        <div style={{ display: "grid", gap: 12, margin: "20px 0" }}>
+          <label
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "flex-start",
+              border: "1px solid #ccc",
+              padding: 16,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="radio"
+              name="delivery"
+              value="STANDARD"
+              checked={deliveryOption === "STANDARD"}
+              onChange={() => setDeliveryOption("STANDARD")}
+            />
+            <span>
+              <strong>UK Standard Delivery</strong>
+              <br />
+              <small>2–5 working days</small>
+              <br />
               <small>
-                {" "} · Free delivery on orders £75+
+                {freeStandardDelivery
+                  ? "FREE on orders £75+"
+                  : "£3.99 · Free on orders £75+"}
               </small>
-            )}
-          </span>
-        </label>
+            </span>
+          </label>
 
-        <label
-          style={{
-            display: "flex",
-            gap: "12px",
-            alignItems: "flex-start",
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="radio"
-            name="delivery"
-            checked={deliveryOption === "NEXT_DAY"}
-            onChange={() => setDeliveryOption("NEXT_DAY")}
-          />
+          <label
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "flex-start",
+              border: "1px solid #ccc",
+              padding: 16,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="radio"
+              name="delivery"
+              value="NEXT_DAY"
+              checked={deliveryOption === "NEXT_DAY"}
+              onChange={() => setDeliveryOption("NEXT_DAY")}
+            />
+            <span>
+              <strong>UK Next Day Delivery</strong>
+              <br />
+              <small>Next working day</small>
+              <br />
+              <small>£4.99</small>
+            </span>
+          </label>
 
-          <span>
-            <strong>Next Day Delivery</strong>
-            <br />
-            <small>Next working day</small>
-            <br />
-            <strong>{formatGBP(499)}</strong>
-          </span>
-        </label>
-
-        <div
-          style={{
-            borderTop: "1px solid #ddd",
-            paddingTop: "16px",
-            marginTop: "16px",
-          }}
-        >
-          <p>
-            <strong>Subtotal:</strong>{" "}
-            {formatGBP(subtotal)}
-          </p>
-
-          <p>
-            <strong>Delivery:</strong>{" "}
-            {deliveryCost === 0
-              ? "FREE"
-              : formatGBP(deliveryCost)}
-          </p>
-
-          <h3>
-            TOTAL: {formatGBP(total)}
-          </h3>
+          <label
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "flex-start",
+              border: "1px solid #ccc",
+              padding: 16,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="radio"
+              name="delivery"
+              value="CHINA"
+              checked={deliveryOption === "CHINA"}
+              onChange={() => setDeliveryOption("CHINA")}
+            />
+            <span>
+              <strong>China Shipping</strong>
+              <br />
+              <small>Estimated delivery: 2–3 weeks</small>
+              <br />
+              <strong>FREE</strong>
+            </span>
+          </label>
         </div>
 
+        <div style={{ borderTop: "1px solid #ccc", paddingTop: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+            <span>Subtotal</span>
+            <span>{formatGBP(subtotal)}</span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+            <span>Delivery</span>
+            <span>{deliveryCost === 0 ? "FREE" : formatGBP(deliveryCost)}</span>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: 20,
+              fontWeight: "bold",
+              borderTop: "1px solid #ccc",
+              paddingTop: 16,
+              marginTop: 16,
+            }}
+          >
+            <span>Total</span>
+            <span>{formatGBP(total)}</span>
+          </div>
+        </div>
+
+        {message && (
+          <p style={{ color: "red", marginTop: 16 }}>{message}</p>
+        )}
+
         <button
-          className="solid-button"
-          disabled={!items.length || !email.includes("@") || busy}
-          onClick={() => void pay()}
+          onClick={pay}
+          disabled={busy || !items.length}
+          style={{ width: "100%", marginTop: 24 }}
         >
-          {busy ? "PLEASE WAIT" : "CONTINUE TO SECURE PAYMENT"}
+          {busy ? "Redirecting..." : "Proceed to payment"}
         </button>
-
-        {message && <p role="alert">{message}</p>}
-
-        <small className="muted">
-          Secure payments powered by Stripe.
-        </small>
       </div>
     </section>
   );
