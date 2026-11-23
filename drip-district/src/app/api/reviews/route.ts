@@ -1,79 +1,66 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCustomerSession } from "@/lib/customer-auth";
 
-export const runtime = "nodejs";
-
 export async function POST(req: Request) {
   try {
-    const customer = await getCustomerSession();
+    const session = await getCustomerSession();
 
-    if (!customer) {
+    if (!session) {
       return NextResponse.json(
-        { error: "Please sign in to leave a review." },
+        { error: "Please sign in to review a product." },
         { status: 401 }
       );
     }
 
-    const body = await req.json();
-
-    const productId = String(body.productId || "");
-    const rating = Number(body.rating);
-    const title = String(body.title || "").trim();
-    const reviewBody = String(body.body || "").trim();
+    const { productId, rating, title, body } = await req.json();
 
     if (!productId || !Number.isInteger(rating) || rating < 1 || rating > 5) {
       return NextResponse.json(
-        { error: "Please select a product and a rating between 1 and 5 stars." },
+        { error: "Please select a rating between 1 and 5 stars." },
         { status: 400 }
       );
     }
 
-    if (!reviewBody || reviewBody.length < 10 || reviewBody.length > 2000) {
+    if (!body || typeof body !== "string" || body.trim().length < 10) {
       return NextResponse.json(
-        { error: "Your review must be between 10 and 2000 characters." },
-        { status: 400 }
-      );
-    }
-
-    if (title.length > 100) {
-      return NextResponse.json(
-        { error: "Your review title must be 100 characters or fewer." },
+        { error: "Your review must be at least 10 characters long." },
         { status: 400 }
       );
     }
 
     const product = await prisma.product.findUnique({
       where: { id: productId },
-      select: { id: true, title: true, active: true },
     });
 
     if (!product || !product.active) {
       return NextResponse.json(
-        { error: "This product is unavailable." },
+        { error: "Product not found." },
         { status: 404 }
       );
     }
 
-    // Only customers with an order for this product that has progressed
-    // beyond pending payment may submit a verified purchase review.
-    const orders = await prisma.order.findMany({
+    // Only orders that have actually been delivered qualify.
+    const deliveredOrders = await prisma.order.findMany({
       where: {
-        userId: customer.id,
-        status: {
-          in: ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"],
-        },
+        userId: session.userId,
+        status: "DELIVERED",
       },
-      include: { items: true },
+      include: {
+        items: true,
+      },
     });
 
-    const purchased = orders.some((order) =>
+    const hasPurchased = deliveredOrders.some((order) =>
       order.items.some((item) => item.productTitle === product.title)
     );
 
-    if (!purchased) {
+    if (!hasPurchased) {
       return NextResponse.json(
-        { error: "You must purchase this product before reviewing it." },
+        {
+          error: "You can only review products you have purchased and received.",
+        },
         { status: 403 }
       );
     }
@@ -82,7 +69,7 @@ export async function POST(req: Request) {
       where: {
         productId_userId: {
           productId,
-          userId: customer.id,
+          userId: session.userId,
         },
       },
     });
@@ -94,40 +81,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const review = await prisma.review.create({
+    await prisma.review.create({
       data: {
         productId,
-        userId: customer.id,
+        userId: session.userId,
         rating,
-        title: title || null,
-        body: reviewBody,
+        title: title?.trim() || null,
+        body: body.trim(),
         verified: true,
         approved: false,
       },
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Your review has been submitted for approval.",
-        reviewId: review.id,
-      },
-      { status: 201 }
-    );
-  } catch (e) {
-    if (
-      e instanceof Error &&
-      "code" in e &&
-      (e as { code?: string }).code === "P2002"
-    ) {
+    return NextResponse.json({
+      success: true,
+      message: "Review submitted! It will appear once approved.",
+    });
+  } catch (error: any) {
+    if (error?.code === "P2002") {
       return NextResponse.json(
         { error: "You have already reviewed this product." },
         { status: 409 }
       );
     }
 
+    console.error("Review submission error:", error);
+
     return NextResponse.json(
-      { error: "Unable to submit your review right now." },
+      { error: "Something went wrong submitting your review." },
       { status: 500 }
     );
   }
