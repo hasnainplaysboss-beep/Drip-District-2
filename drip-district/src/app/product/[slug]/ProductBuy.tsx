@@ -22,13 +22,39 @@ export default function ProductBuy({
     variants: Variant[];
   };
 }) {
+  const availableVariants = product.variants.filter(
+    (x) => x.stock > 0
+  );
+
   const [variant, setVariant] = useState(
-    product.variants.find((x) => x.stock > 0)?.id || ""
+    availableVariants[0]?.id || ""
   );
 
   const { add } = useCart();
 
-  const v = product.variants.find((x) => x.id === variant);
+  const v = availableVariants.find((x) => x.id === variant);
+
+  if (product.variants.length === 0) {
+    return (
+      <div className="simple-form">
+        <p>This product is currently unavailable.</p>
+        <button className="solid-button" disabled>
+          OUT OF STOCK
+        </button>
+      </div>
+    );
+  }
+
+  if (availableVariants.length === 0) {
+    return (
+      <div className="simple-form">
+        <p>All options are currently out of stock.</p>
+        <button className="solid-button" disabled>
+          OUT OF STOCK
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="simple-form">
@@ -39,15 +65,14 @@ export default function ProductBuy({
           value={variant}
           onChange={(e) => setVariant(e.target.value)}
         >
-          {product.variants.map((x) => (
-            <option key={x.id} value={x.id} disabled={x.stock < 1}>
+          {availableVariants.map((x) => (
+            <option key={x.id} value={x.id}>
               {x.region} delivery
               {x.size ? ` · ${x.size}` : ""}
               {x.colour ? ` · ${x.colour}` : ""}
               {" · "}
               £{(x.pricePence / 100).toFixed(2)}
-              {" · "}
-              {x.stock > 0 ? "IN STOCK" : "OUT OF STOCK"}
+              {" · IN STOCK"}
             </option>
           ))}
         </select>
@@ -55,17 +80,18 @@ export default function ProductBuy({
 
       <button
         className="solid-button"
-        disabled={!v || v.stock < 1}
-        onClick={() =>
-          v &&
+        disabled={!v}
+        onClick={() => {
+          if (!v) return;
+
           add({
             id: v.id,
             title: product.title,
             price: v.pricePence,
             quantity: 1,
             delivery: v.region as "UK" | "CHINA",
-          })
-        }
+          });
+        }}
       >
         ADD TO BAG
       </button>
