@@ -1,3 +1,4 @@
+
 import "./auth-pages.css";
 import type { Metadata } from "next";
 import "./globals.css";
@@ -7,8 +8,28 @@ import Chatbot from "@/components/Chatbot";
 
 export const metadata: Metadata = {
   title: "Drip District | Designer Clothing, Tech & Accessories",
-  description: "Shop Drip District for designer clothing, electronics and accessories. Discover premium brands, sought-after styles and the latest essentials all in one destination."
+  description:
+    "Shop Drip District for designer clothing, electronics and accessories. Discover premium brands, sought-after styles and the latest essentials all in one destination.",
+  verification: {
+    google: "7QHf-8jiuJyjdGozqkKpIhYCcuICU7umOY-b-VpOl-M",
+  },
 };
-export default function RootLayout({children}:{children:React.ReactNode}) {
- return <html lang="en-GB"><body><CartProvider><Header/><main>{children}</main><Footer/><Chatbot/></CartProvider></body></html>;
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en-GB">
+      <body>
+        <CartProvider>
+          <Header />
+          <main>{children}</main>
+          <Footer />
+          <Chatbot />
+        </CartProvider>
+      </body>
+    </html>
+  );
 }
