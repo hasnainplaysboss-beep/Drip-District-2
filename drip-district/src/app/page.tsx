@@ -86,7 +86,8 @@ export default async function Home() {
           <h2 className="section-heading">FEATURED PRODUCTS</h2>
 
           <div
-            style={{
+  className="featured-carousel"
+  style={{
               display: "flex",
               gap: "12px",
               overflowX: "auto",
