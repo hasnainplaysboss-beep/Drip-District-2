@@ -22,7 +22,14 @@ export async function POST(req: Request) {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     const storeUrl = process.env.STORE_URL || new URL(req.url).origin;
     const session = await stripe.checkout.sessions.create({
-      mode: "payment", customer_email: email,
+      mode: "payment",
+customer_email: email,
+shipping_address_collection: {
+  allowed_countries: ["GB"],
+},
+phone_number_collection: {
+  enabled: true,
+},
       line_items: cleanItems.map(x => ({ price_data: { currency: "gbp", product_data: { name: `${x.variant.product.title} — ${x.variant.deliveryRegion} delivery` }, unit_amount: x.variant.pricePence }, quantity: x.quantity })),
       success_url: `${storeUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${storeUrl}/cart`,
