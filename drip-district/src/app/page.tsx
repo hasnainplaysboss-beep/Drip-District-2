@@ -1,5 +1,6 @@
 
 
+
 import Link from "next/link";
 import { categories } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +25,7 @@ export default async function Home() {
     orderBy: {
       createdAt: "desc",
     },
-    take: 8,
+    take: 20,
   });
 
   return (
@@ -86,14 +87,14 @@ export default async function Home() {
 
           <div
             style={{
-              display: "grid",
-              gridAutoFlow: "column",
-              gridAutoColumns: "calc((100% - 16px) / 2)",
-              gridTemplateRows: "1fr",
-              gap: "16px",
+              display: "flex",
+              gap: "12px",
               overflowX: "auto",
               overflowY: "hidden",
+              width: "100%",
               paddingBottom: "16px",
+              paddingRight: "12px",
+              boxSizing: "border-box",
               scrollSnapType: "x mandatory",
               WebkitOverflowScrolling: "touch",
             }}
@@ -106,6 +107,7 @@ export default async function Home() {
                 style={{
                   color: "inherit",
                   textDecoration: "none",
+                  flex: "0 0 44%",
                   minWidth: 0,
                   scrollSnapAlign: "start",
                 }}
