@@ -1,4 +1,4 @@
-
+import OrderActions from "./OrderActions";
 import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -168,6 +168,12 @@ export default async function OrdersPage() {
               <p>
                 Tracking number: {order.trackingNumber || "Not added"}
               </p>
+              <OrderActions
+  orderId={order.id}
+  status={order.status}
+  trackingCarrier={order.trackingCarrier}
+  trackingNumber={order.trackingNumber}
+/>
             </article>
           ))}
         </div>
