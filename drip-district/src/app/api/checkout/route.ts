@@ -1,4 +1,5 @@
 
+
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
@@ -16,12 +17,17 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    const customer = await getCustomerSession();
 
-    const requestedEmail = String(body.email || "").trim().toLowerCase();
+    const email = customer
+      ? customer.email
+      : String(body.email || "").trim().toLowerCase();
+
     const items = body.items;
+    const deliveryOption = body.deliveryOption;
 
     if (
-      !requestedEmail.includes("@") ||
+      !email.includes("@") ||
       !Array.isArray(items) ||
       !items.length ||
       items.length > 40
@@ -32,15 +38,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // Identify the logged-in customer securely.
-    const customer = await getCustomerSession();
+    if (
+      deliveryOption !== "STANDARD" &&
+      deliveryOption !== "NEXT_DAY"
+    ) {
+      return NextResponse.json(
+        { error: "Please select a delivery option." },
+        { status: 400 }
+      );
+    }
 
-    // Use the account email for logged-in customers.
-    // Guest customers can still use their checkout email.
-    const email = customer ? customer.email : requestedEmail;
-
-    const ids = items.map(
-      (item: { variantId: string }) => String(item.variantId)
+    const ids = items.map((x: { variantId: string }) =>
+      String(x.variantId)
     );
 
     if (new Set(ids).size !== ids.length) {
@@ -62,7 +71,7 @@ export async function POST(req: Request) {
 
     if (
       variants.length !== items.length ||
-      variants.some((variant) => !variant.product.active)
+      variants.some((v) => !v.product.active)
     ) {
       return NextResponse.json(
         { error: "One or more products are unavailable." },
@@ -72,41 +81,85 @@ export async function POST(req: Request) {
 
     const cleanItems = items.map(
       (item: { variantId: string; quantity: number }) => {
-        const variant = variants.find(
-          (entry) => entry.id === item.variantId
-        );
+        const v = variants.find((x) => x.id === item.variantId);
 
-        if (!variant) {
+        if (!v) {
           throw new Error("Product variant not found.");
         }
 
         if (
           !Number.isInteger(item.quantity) ||
           item.quantity < 1 ||
-          item.quantity > variant.stock
+          item.quantity > v.stock
         ) {
           throw new Error(
-            `Insufficient stock for ${variant.product.title}.`
+            `Insufficient stock for ${v.product.title}.`
           );
         }
 
         return {
-          variant,
+          variant: v,
           quantity: item.quantity,
         };
       }
     );
 
-    const total = cleanItems.reduce(
-      (sum, item) =>
-        sum + item.variant.pricePence * item.quantity,
+    const subtotal = cleanItems.reduce(
+      (sum, x) => sum + x.variant.pricePence * x.quantity,
       0
     );
 
+    const deliveryPence =
+      deliveryOption === "NEXT_DAY"
+        ? 499
+        : subtotal >= 7500
+          ? 0
+          : 399;
+
+    const total = subtotal + deliveryPence;
+
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-    const storeUrl =
-      process.env.STORE_URL || new URL(req.url).origin;
+    const storeUrl = process.env.STORE_URL || new URL(req.url).origin;
+
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
+      cleanItems.map((x) => ({
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name: `${x.variant.product.title} — ${x.variant.deliveryRegion} delivery`,
+          },
+          unit_amount: x.variant.pricePence,
+        },
+        quantity: x.quantity,
+      }));
+
+    if (deliveryPence > 0) {
+      lineItems.push({
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name:
+              deliveryOption === "NEXT_DAY"
+                ? "UK Next Day Delivery"
+                : "UK Standard Delivery (2–5 working days)",
+          },
+          unit_amount: deliveryPence,
+        },
+        quantity: 1,
+      });
+    } else {
+      lineItems.push({
+        price_data: {
+          currency: "gbp",
+          product_data: {
+            name: "UK Standard Delivery (FREE)",
+          },
+          unit_amount: 0,
+        },
+        quantity: 1,
+      });
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -120,16 +173,7 @@ export async function POST(req: Request) {
         enabled: true,
       },
 
-      line_items: cleanItems.map((item) => ({
-        price_data: {
-          currency: "gbp",
-          product_data: {
-            name: `${item.variant.product.title} — ${item.variant.deliveryRegion} delivery`,
-          },
-          unit_amount: item.variant.pricePence,
-        },
-        quantity: item.quantity,
-      })),
+      line_items: lineItems,
 
       success_url: `${storeUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${storeUrl}/cart`,
@@ -137,50 +181,40 @@ export async function POST(req: Request) {
       metadata: {
         source: "drip-district",
         customerId: customer?.id || "",
+        deliveryOption,
+        deliveryPence: String(deliveryPence),
       },
     });
 
     await prisma.order.create({
       data: {
-        email,
-
-        // This links logged-in customers to their orders.
-        // Guest orders remain unlinked.
         userId: customer?.id || null,
-
+        email,
         stripeSessionId: session.id,
-        subtotalPence: total,
-        deliveryPence: 0,
+        subtotalPence: subtotal,
+        deliveryPence,
         totalPence: total,
 
         items: {
-          create: cleanItems.map((item) => ({
-            productTitle: item.variant.product.title,
-
-            variantLabel: `${item.variant.deliveryRegion}${
-              item.variant.size ? ` / ${item.variant.size}` : ""
-            }${
-              item.variant.colour ? ` / ${item.variant.colour}` : ""
-            }`,
-
-            quantity: item.quantity,
-            unitPricePence: item.variant.pricePence,
+          create: cleanItems.map((x) => ({
+            productTitle: x.variant.product.title,
+            variantLabel: `${x.variant.deliveryRegion}${
+              x.variant.size ? ` / ${x.variant.size}` : ""
+            }${x.variant.colour ? ` / ${x.variant.colour}` : ""}`,
+            quantity: x.quantity,
+            unitPricePence: x.variant.pricePence,
           })),
         },
       },
     });
 
-    return NextResponse.json({
-      url: session.url,
-    });
-  } catch (error) {
-    console.error("Checkout error:", error);
-
+    return NextResponse.json({ url: session.url });
+  } catch (e) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error
-            ? error.message
+          e instanceof Error
+            ? e.message
             : "Unable to create checkout session.",
       },
       { status: 400 }
