@@ -1,4 +1,5 @@
 
+
 import "./auth-pages.css";
 import type { Metadata } from "next";
 import "./globals.css";
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
   description:
     "Shop Drip District for designer clothing, electronics and accessories. Discover premium brands, sought-after styles and the latest essentials all in one destination.",
   verification: {
-    google: "7QHf-8jiuJyjdGozqkKpIhYCcuICU7umOY-b-VpOl-M",
+    google: "xPmMuxMa-tBKyBxvrjgswduQfOs5oZr7qoDjNrCR00o",
   },
 };
 
