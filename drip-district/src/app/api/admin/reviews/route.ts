@@ -1,17 +1,18 @@
 
 
 
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-auth";
+import { isAdmin } from "@/lib/auth";
 
 export async function GET() {
   try {
-    const session = await getAdminSession();
+    const admin = await isAdmin();
 
-    if (!session) {
+    if (!admin) {
       return NextResponse.json(
-        { error: "Unauthorised" },
+        { error: "Unauthorised. Admin access required." },
         { status: 401 }
       );
     }
@@ -46,11 +47,11 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   try {
-    const session = await getAdminSession();
+    const admin = await isAdmin();
 
-    if (!session) {
+    if (!admin) {
       return NextResponse.json(
-        { error: "Unauthorised" },
+        { error: "Unauthorised. Admin access required." },
         { status: 401 }
       );
     }
@@ -58,7 +59,7 @@ export async function PATCH(req: Request) {
     const { reviewId, action } = await req.json();
 
     if (
-      !reviewId ||
+      typeof reviewId !== "string" ||
       !["approve", "reject"].includes(action)
     ) {
       return NextResponse.json(
