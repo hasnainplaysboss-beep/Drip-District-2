@@ -16,7 +16,12 @@ export async function POST(req: Request) {
 
     const { productId, rating, title, body } = await req.json();
 
-    if (!productId || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+    if (
+      !productId ||
+      !Number.isInteger(rating) ||
+      rating < 1 ||
+      rating > 5
+    ) {
       return NextResponse.json(
         { error: "Please select a rating between 1 and 5 stars." },
         { status: 400 }
@@ -41,10 +46,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Only orders that have actually been delivered qualify.
+    // Only customers with delivered orders can review.
     const deliveredOrders = await prisma.order.findMany({
       where: {
-        userId: session.userId,
+        userId: session.id,
         status: "DELIVERED",
       },
       include: {
@@ -53,13 +58,16 @@ export async function POST(req: Request) {
     });
 
     const hasPurchased = deliveredOrders.some((order) =>
-      order.items.some((item) => item.productTitle === product.title)
+      order.items.some(
+        (item) => item.productTitle === product.title
+      )
     );
 
     if (!hasPurchased) {
       return NextResponse.json(
         {
-          error: "You can only review products you have purchased and received.",
+          error:
+            "You can only review products you have purchased and received.",
         },
         { status: 403 }
       );
@@ -69,7 +77,7 @@ export async function POST(req: Request) {
       where: {
         productId_userId: {
           productId,
-          userId: session.userId,
+          userId: session.id,
         },
       },
     });
@@ -84,9 +92,9 @@ export async function POST(req: Request) {
     await prisma.review.create({
       data: {
         productId,
-        userId: session.userId,
+        userId: session.id,
         rating,
-        title: title?.trim() || null,
+        title: typeof title === "string" ? title.trim() || null : null,
         body: body.trim(),
         verified: true,
         approved: false,
