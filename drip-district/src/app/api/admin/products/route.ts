@@ -1,4 +1,5 @@
 
+
 import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 import { isAdmin } from "@/lib/auth";
@@ -261,39 +262,53 @@ export async function POST(request: Request) {
     };
 
     const product = await prisma.$transaction(async (tx) => {
+      let savedProduct;
+
       if (existingProduct) {
-        await tx.product.update({
+        savedProduct = await tx.product.update({
           where: { id },
           data: productData,
         });
-
-        await tx.productVariant.deleteMany({
-          where: { productId: id },
-        });
-
-        return tx.product.update({
-          where: { id },
-          data: {
-            variants: {
-              create: variants,
-            },
-          },
-          include: {
-            variants: true,
-          },
+      } else {
+        savedProduct = await tx.product.create({
+          data: productData,
         });
       }
 
-      return tx.product.create({
-        data: {
-          ...productData,
-          variants: {
-            create: variants,
-          },
-        },
-        include: {
-          variants: true,
-        },
+      const savedVariants = await tx.productVariant.findMany({
+        where: { productId: savedProduct.id },
+      });
+
+      for (const incoming of variants) {
+        const matchingVariant = savedVariants.find(
+          (old) =>
+            old.size === incoming.size &&
+            old.colour === incoming.colour &&
+            old.deliveryRegion === incoming.deliveryRegion
+        );
+
+        if (matchingVariant) {
+          await tx.productVariant.update({
+            where: { id: matchingVariant.id },
+            data: {
+              pricePence: incoming.pricePence,
+              stock: incoming.stock,
+              active: true,
+            },
+          });
+        } else {
+          await tx.productVariant.create({
+            data: {
+              productId: savedProduct.id,
+              ...incoming,
+            },
+          });
+        }
+      }
+
+      return tx.product.findUnique({
+        where: { id: savedProduct.id },
+        include: { variants: true },
       });
     });
 
@@ -362,7 +377,9 @@ export async function DELETE(request: Request) {
         : "Unknown server error.";
 
     return NextResponse.json(
-      { error: errorMessage },
+      {
+        error: errorMessage,
+      },
       { status: 500 }
     );
   }
