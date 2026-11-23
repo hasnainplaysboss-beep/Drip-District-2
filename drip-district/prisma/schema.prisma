@@ -87,6 +87,14 @@ model Order {
   trackingCarrier       String?
   createdAt             DateTime @default(now())
   items                 OrderItem[]
+  shippingName        String?
+  shippingPhone       String?
+  shippingAddress1    String?
+  shippingAddress2    String?
+  shippingCity        String?
+  shippingCounty      String?
+  shippingPostcode    String?
+  shippingCountry     String?
 }
 
 model OrderItem {
