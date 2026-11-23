@@ -2,39 +2,46 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { formatGBP } from "@/lib/money";
 
-export default async function Subcategory({
+export const dynamic = "force-dynamic";
+
+const categories: Record<string, string> = {
+  "mens-clothing": "Mens Clothing",
+  "womens-clothing": "Womens Clothing",
+  electronics: "Electronics",
+  "mens-accessories": "Mens Accessories",
+  "womens-accessories": "Womens Accessories",
+};
+
+export default async function CategoryPage({
   params,
 }: {
   params: Promise<{ category: string; subcategory: string }>;
 }) {
   const { category, subcategory } = await params;
 
-  if (
-    !["clothing", "accessories"].includes(category) ||
-    !["mens", "womens"].includes(subcategory)
-  ) {
-    return notFound();
-  }
+  const categoryKey =
+    category === "clothing"
+      ? `${subcategory}-clothing`
+      : category === "accessories"
+        ? `${subcategory}-accessories`
+        : category === "electronics"
+          ? "electronics"
+          : "";
 
-  const categoryName =
-    `${subcategory === "mens" ? "Mens" : "Womens"} ${
-      category === "mens" ? "" : category === "accessories" ? "Accessories" : "Clothing"
-    }`.trim();
+  const selectedCategory = categories[categoryKey];
+
+  if (!selectedCategory) notFound();
 
   const products = await prisma.product.findMany({
     where: {
-      category: categoryName,
       active: true,
+      category: selectedCategory,
     },
     include: {
       variants: {
-        where: {
-          active: true,
-        },
-        orderBy: {
-          pricePence: "asc",
-        },
+        where: { active: true },
       },
     },
     orderBy: {
@@ -45,83 +52,49 @@ export default async function Subcategory({
   return (
     <>
       <div className="page-intro">
-        <div className="eyebrow">
-          DRIP DISTRICT / {category.toUpperCase()}
-        </div>
-
-        <h1>
-          {subcategory === "mens" ? "MEN'S" : "WOMEN'S"}{" "}
-          {category.toUpperCase()}
-        </h1>
-
-        <p>Explore the latest collection from Drip District.</p>
+        <div className="eyebrow">DRIP DISTRICT</div>
+        <h1>{selectedCategory.toUpperCase()}</h1>
+        <p>Discover the latest from Drip District.</p>
       </div>
 
       <section className="section">
-        {products.length === 0 ? (
+        <div className="product-grid">
+          {products.map((product) => (
+            <Link
+              className="product-card"
+              href={`/product/${product.slug}`}
+              key={product.id}
+            >
+              <div
+                className="product-image"
+                style={{
+                  backgroundImage: product.images[0]
+                    ? `url(${product.images[0]})`
+                    : undefined,
+                }}
+              />
+
+              <h3>{product.title}</h3>
+
+              <p>
+                {product.variants.length
+                  ? formatGBP(
+                      Math.min(
+                        ...product.variants.map(
+                          (variant) => variant.pricePence
+                        )
+                      )
+                    )
+                  : "Price unavailable"}
+              </p>
+            </Link>
+          ))}
+        </div>
+
+        {products.length === 0 && (
           <p className="muted">
-            No products are available in this collection yet.
+            Products will appear here once added in the admin dashboard.
           </p>
-        ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: "24px",
-            }}
-          >
-            {products.map((product) => {
-              const startingPrice = product.variants[0]?.pricePence;
-
-              return (
-                <Link
-                  key={product.id}
-                  href={`/product/${product.slug}`}
-                  style={{
-                    color: "inherit",
-                    textDecoration: "none",
-                  }}
-                >
-                  <div>
-                    {product.images[0] ? (
-                      <img
-                        src={product.images[0]}
-                        alt={product.title}
-                        style={{
-                          width: "100%",
-                          aspectRatio: "3 / 4",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: "100%",
-                          aspectRatio: "3 / 4",
-                          background: "#eee",
-                          display: "grid",
-                          placeItems: "center",
-                        }}
-                      >
-                        NO IMAGE
-                      </div>
-                    )}
-
-                    <h2 style={{ marginTop: "12px" }}>
-                      {product.title}
-                    </h2>
-
-                    {startingPrice !== undefined && (
-                      <p>
-                        £{(startingPrice / 100).toFixed(2)}
-                      </p>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
         )}
       </section>
     </>
