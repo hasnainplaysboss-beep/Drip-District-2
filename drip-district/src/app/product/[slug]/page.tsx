@@ -1,9 +1,9 @@
 
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { formatGBP } from "@/lib/money";
 import ProductBuy from "./ProductBuy";
 import ProductGallery from "./ProductGallery";
+import ProductReviews from "./ProductReviews";
 
 export const dynamic = "force-dynamic";
 
@@ -70,17 +70,25 @@ export default async function ProductPage({
       <section className="section">
         <h2 className="section-heading">CUSTOMER REVIEWS</h2>
 
+        {p.reviews.length === 0 && (
+          <p>No approved reviews yet. Be the first to review!</p>
+        )}
+
         {p.reviews.map((r) => (
           <article className="simple-card" key={r.id}>
             <b>
-              {r.rating}/5 · {r.title}
+              {r.rating}/5
+              {r.title ? ` · ${r.title}` : ""}
             </b>
 
             <p>{r.body}</p>
 
             {r.verified && <small>Verified purchase</small>}
+            <small>Anonymous Customer</small>
           </article>
         ))}
+
+        <ProductReviews productId={p.id} />
       </section>
     </>
   );
