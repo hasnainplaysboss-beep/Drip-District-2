@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { formatGBP } from "@/lib/money";
 
-type DeliveryOption = "STANDARD" | "NEXT_DAY" | "CHINA";
+type DeliveryOption = "STANDARD" | "NEXT_DAY";
 
 export default function Checkout() {
   const { items } = useCart();
@@ -14,16 +14,35 @@ export default function Checkout() {
   const [busy, setBusy] = useState(false);
 
   const subtotal = items.reduce((n, i) => n + i.price * i.quantity, 0);
+
+  const regions = Array.from(
+    new Set(
+      items.map((i) =>
+        String(
+          (i as typeof i & { region?: string; deliveryRegion?: string }).region ??
+            (i as typeof i & { deliveryRegion?: string }).deliveryRegion ??
+            ""
+        ).toUpperCase()
+      )
+    )
+  );
+
+  const isChina = regions.length === 1 && regions[0] === "CHINA";
+  const isUK = regions.length === 1 && regions[0] === "UK";
+  const isMixed = regions.length > 1;
+  const validRegion = isChina || isUK;
+
+  const effectiveDeliveryOption = isChina ? "CHINA" : deliveryOption;
+
   const freeStandardDelivery = subtotal >= 7500;
 
-  const deliveryCost =
-    deliveryOption === "CHINA"
-      ? 0
-      : deliveryOption === "NEXT_DAY"
-        ? 499
-        : freeStandardDelivery
-          ? 0
-          : 399;
+  const deliveryCost = isChina
+    ? 0
+    : deliveryOption === "NEXT_DAY"
+      ? 499
+      : freeStandardDelivery
+        ? 0
+        : 399;
 
   const total = subtotal + deliveryCost;
 
@@ -40,6 +59,11 @@ export default function Checkout() {
       return;
     }
 
+    if (!validRegion) {
+      setMessage("Your basket contains an invalid delivery combination.");
+      return;
+    }
+
     setBusy(true);
 
     try {
@@ -48,7 +72,7 @@ export default function Checkout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          deliveryOption,
+          deliveryOption: effectiveDeliveryOption,
           items: items.map((i) => ({
             variantId: i.id,
             quantity: i.quantity,
@@ -94,124 +118,142 @@ export default function Checkout() {
 
         <h2>Delivery method</h2>
 
-        <div style={{ display: "grid", gap: 12, margin: "20px 0" }}>
-          <label
-            style={{
-              display: "flex",
-              gap: 12,
-              alignItems: "flex-start",
-              border: "1px solid #ccc",
-              padding: 16,
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="radio"
-              name="delivery"
-              value="STANDARD"
-              checked={deliveryOption === "STANDARD"}
-              onChange={() => setDeliveryOption("STANDARD")}
-            />
-            <span>
-              <strong>UK Standard Delivery</strong>
-              <br />
-              <small>2–5 working days</small>
-              <br />
-              <small>
-                {freeStandardDelivery
-                  ? "FREE on orders £75+"
-                  : "£3.99 · Free on orders £75+"}
-              </small>
-            </span>
-          </label>
+        {isMixed && (
+          <p style={{ color: "#b91c1c", marginTop: 16 }}>
+            Your basket contains products with different delivery regions. Please
+            purchase UK and China delivery products separately.
+          </p>
+        )}
 
-          <label
-            style={{
-              display: "flex",
-              gap: 12,
-              alignItems: "flex-start",
-              border: "1px solid #ccc",
-              padding: 16,
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="radio"
-              name="delivery"
-              value="NEXT_DAY"
-              checked={deliveryOption === "NEXT_DAY"}
-              onChange={() => setDeliveryOption("NEXT_DAY")}
-            />
-            <span>
-              <strong>UK Next Day Delivery</strong>
-              <br />
-              <small>Next working day</small>
-              <br />
-              <small>£4.99</small>
-            </span>
-          </label>
+        {!validRegion && !isMixed && items.length > 0 && (
+          <p style={{ color: "#b91c1c", marginTop: 16 }}>
+            We couldn't determine the delivery region for your basket. Please
+            return to your basket.
+          </p>
+        )}
 
-          <label
-            style={{
-              display: "flex",
-              gap: 12,
-              alignItems: "flex-start",
-              border: "1px solid #ccc",
-              padding: 16,
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="radio"
-              name="delivery"
-              value="CHINA"
-              checked={deliveryOption === "CHINA"}
-              onChange={() => setDeliveryOption("CHINA")}
-            />
-            <span>
-              <strong>China Shipping</strong>
-              <br />
-              <small>Estimated delivery: 2–3 weeks</small>
-              <br />
-              <strong>FREE</strong>
-            </span>
-          </label>
-        </div>
-
-        <div style={{ borderTop: "1px solid #ccc", paddingTop: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-            <span>Subtotal</span>
-            <span>{formatGBP(subtotal)}</span>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-            <span>Delivery</span>
-            <span>{deliveryCost === 0 ? "FREE" : formatGBP(deliveryCost)}</span>
-          </div>
-
+        {isChina && (
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              fontSize: 20,
-              fontWeight: "bold",
-              borderTop: "1px solid #ccc",
-              paddingTop: 16,
-              marginTop: 16,
+              border: "1px solid #ccc",
+              padding: 20,
+              margin: "20px 0",
             }}
           >
-            <span>Total</span>
-            <span>{formatGBP(total)}</span>
+            <strong>China Shipping</strong>
+            <br />
+            <small>Estimated delivery: 2–3 weeks</small>
+            <br />
+            <strong style={{ display: "inline-block", marginTop: 8 }}>FREE</strong>
           </div>
-        </div>
-
-        {message && (
-          <p style={{ color: "red", marginTop: 16 }}>{message}</p>
         )}
+
+        {isUK && (
+          <div style={{ display: "grid", gap: 12, margin: "20px 0" }}>
+            <label
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+                border: "1px solid #ccc",
+                padding: 16,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="radio"
+                name="delivery"
+                value="STANDARD"
+                checked={deliveryOption === "STANDARD"}
+                onChange={() => setDeliveryOption("STANDARD")}
+              />
+              <span>
+                <strong>UK Standard Delivery</strong>
+                <br />
+                <small>2–5 working days</small>
+                <br />
+                <small>
+                  {freeStandardDelivery
+                    ? "FREE on orders £75+"
+                    : "£3.99 · Free on orders £75+"}
+                </small>
+              </span>
+            </label>
+
+            <label
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+                border: "1px solid #ccc",
+                padding: 16,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="radio"
+                name="delivery"
+                value="NEXT_DAY"
+                checked={deliveryOption === "NEXT_DAY"}
+                onChange={() => setDeliveryOption("NEXT_DAY")}
+              />
+              <span>
+                <strong>UK Next Day Delivery</strong>
+                <br />
+                <small>Next working day</small>
+                <br />
+                <small>£4.99</small>
+              </span>
+            </label>
+          </div>
+        )}
+
+        {validRegion && (
+          <div style={{ borderTop: "1px solid #ccc", paddingTop: 20 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 10,
+              }}
+            >
+              <span>Subtotal</span>
+              <span>{formatGBP(subtotal)}</span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 10,
+              }}
+            >
+              <span>Delivery</span>
+              <span>{deliveryCost === 0 ? "FREE" : formatGBP(deliveryCost)}</span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 20,
+                fontWeight: "bold",
+                borderTop: "1px solid #ccc",
+                paddingTop: 16,
+                marginTop: 16,
+              }}
+            >
+              <span>Total</span>
+              <span>{formatGBP(total)}</span>
+            </div>
+          </div>
+        )}
+
+        {message && <p style={{ color: "red", marginTop: 16 }}>{message}</p>}
 
         <button
           onClick={pay}
-          disabled={busy || !items.length}
+          disabled={busy || !items.length || !validRegion}
           style={{ width: "100%", marginTop: 24 }}
         >
           {busy ? "Redirecting..." : "Proceed to payment"}
