@@ -1,40 +1,76 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { formatGBP } from "@/lib/money";
 
+type Region = "UK" | "CHINA" | "MIXED" | null;
 type DeliveryOption = "STANDARD" | "NEXT_DAY";
 
 export default function Checkout() {
   const { items } = useCart();
   const [email, setEmail] = useState("");
   const [deliveryOption, setDeliveryOption] = useState<DeliveryOption>("STANDARD");
+  const [region, setRegion] = useState<Region>(null);
+  const [loadingRegion, setLoadingRegion] = useState(true);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
   const subtotal = items.reduce((n, i) => n + i.price * i.quantity, 0);
-
-  const regions = Array.from(
-    new Set(
-      items.map((i) =>
-        String(
-          (i as typeof i & { region?: string; deliveryRegion?: string }).region ??
-            (i as typeof i & { deliveryRegion?: string }).deliveryRegion ??
-            ""
-        ).toUpperCase()
-      )
-    )
-  );
-
-  const isChina = regions.length === 1 && regions[0] === "CHINA";
-  const isUK = regions.length === 1 && regions[0] === "UK";
-  const isMixed = regions.length > 1;
-  const validRegion = isChina || isUK;
-
-  const effectiveDeliveryOption = isChina ? "CHINA" : deliveryOption;
-
   const freeStandardDelivery = subtotal >= 7500;
+
+  const idsKey = items.map((i) => i.id).sort().join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function detectRegion() {
+      setLoadingRegion(true);
+      setRegion(null);
+      setMessage("");
+
+      if (!idsKey) {
+        if (!cancelled) setLoadingRegion(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/checkout/region", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ variantIds: idsKey.split(",") }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to detect delivery region.");
+        }
+
+        if (!cancelled) {
+          setRegion(data.region);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setMessage(
+            e instanceof Error ? e.message : "Unable to detect delivery region."
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingRegion(false);
+      }
+    }
+
+    detectRegion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [idsKey]);
+
+  const isChina = region === "CHINA";
+  const isUK = region === "UK";
+  const isMixed = region === "MIXED";
 
   const deliveryCost = isChina
     ? 0
@@ -59,8 +95,8 @@ export default function Checkout() {
       return;
     }
 
-    if (!validRegion) {
-      setMessage("Your basket contains an invalid delivery combination.");
+    if (!isUK && !isChina) {
+      setMessage("We couldn't confirm your delivery region.");
       return;
     }
 
@@ -72,7 +108,7 @@ export default function Checkout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
-          deliveryOption: effectiveDeliveryOption,
+          deliveryOption: isChina ? "CHINA" : deliveryOption,
           items: items.map((i) => ({
             variantId: i.id,
             quantity: i.quantity,
@@ -118,28 +154,10 @@ export default function Checkout() {
 
         <h2>Delivery method</h2>
 
-        {isMixed && (
-          <p style={{ color: "#b91c1c", marginTop: 16 }}>
-            Your basket contains products with different delivery regions. Please
-            purchase UK and China delivery products separately.
-          </p>
-        )}
+        {loadingRegion && <p>Checking delivery region...</p>}
 
-        {!validRegion && !isMixed && items.length > 0 && (
-          <p style={{ color: "#b91c1c", marginTop: 16 }}>
-            We couldn't determine the delivery region for your basket. Please
-            return to your basket.
-          </p>
-        )}
-
-        {isChina && (
-          <div
-            style={{
-              border: "1px solid #ccc",
-              padding: 20,
-              margin: "20px 0",
-            }}
-          >
+        {!loadingRegion && isChina && (
+          <div style={{ border: "1px solid #ccc", padding: 20, margin: "20px 0" }}>
             <strong>China Shipping</strong>
             <br />
             <small>Estimated delivery: 2–3 weeks</small>
@@ -148,7 +166,7 @@ export default function Checkout() {
           </div>
         )}
 
-        {isUK && (
+        {!loadingRegion && isUK && (
           <div style={{ display: "grid", gap: 12, margin: "20px 0" }}>
             <label
               style={{
@@ -208,26 +226,27 @@ export default function Checkout() {
           </div>
         )}
 
-        {validRegion && (
+        {!loadingRegion && isMixed && (
+          <p style={{ color: "#b91c1c", marginTop: 20 }}>
+            Your basket contains UK and China delivery products. Please purchase
+            them separately.
+          </p>
+        )}
+
+        {!loadingRegion && !region && !message && items.length > 0 && (
+          <p style={{ color: "#b91c1c", marginTop: 20 }}>
+            We couldn't determine your delivery region.
+          </p>
+        )}
+
+        {!loadingRegion && (isUK || isChina) && (
           <div style={{ borderTop: "1px solid #ccc", paddingTop: 20 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 10,
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
               <span>Subtotal</span>
               <span>{formatGBP(subtotal)}</span>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 10,
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
               <span>Delivery</span>
               <span>{deliveryCost === 0 ? "FREE" : formatGBP(deliveryCost)}</span>
             </div>
@@ -253,7 +272,7 @@ export default function Checkout() {
 
         <button
           onClick={pay}
-          disabled={busy || !items.length || !validRegion}
+          disabled={busy || loadingRegion || (!isUK && !isChina) || !items.length}
           style={{ width: "100%", marginTop: 24 }}
         >
           {busy ? "Redirecting..." : "Proceed to payment"}
